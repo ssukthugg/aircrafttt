@@ -155,7 +155,7 @@ async function connectWallet() {
             statusDiv.className = 'status-box success';
             
             // Ganache가 켜져 있는지 확인하는 메시지 추가
-            simulationStatusDiv.innerText = 'Ganache를 실행하고 CSV 파일을 선택해주세요.';
+            simulationStatusDiv.innerText = 'BNB Testnet이 연결되었는지 확인하고 CSV 파일을 선택해주세요.';
 
         } catch (error) {
             statusDiv.innerText = `❌ MetaMask 연결 실패: ${error.message}`;
@@ -245,20 +245,20 @@ async function uploadMaintenanceRecords() {
             const accounts = await web3.eth.getAccounts();
             const adminAccount = accounts[0]; 
 
-            simulationStatusDiv.innerText = `총 ${recordsToSend.length}개 기록을 Ganache에 전송 중입니다. MetaMask 창을 확인해주세요.`;
+            simulationStatusDiv.innerText = `총 ${recordsToSend.length}개 기록을 BNB Testnet에 전송 중입니다. MetaMask 창을 확인해주세요.`;
 
             try {
                 const tx = await maintenanceContract.methods.recordMaintenance(recordsToSend)
                     .send({ 
                         from: adminAccount, 
-                        gas: 80000000 // 배치 처리를 위한 충분한 가스 한도
+                        gas: 8000000 // 배치 처리를 위한 충분한 가스 한도
                     });
 
                 simulationStatusDiv.innerText = `✅ 시뮬레이션 성공! ${recordsToSend.length}개 기록이 블록 ${tx.blockNumber}에 기록되었습니다.`;
                 simulationStatusDiv.className = 'status-box success';
 
             } catch (error) {
-                simulationStatusDiv.innerText = `❌ 트랜잭션 실패: ${error.message}. Ganache가 켜져 있는지, 해당 계정(MetaMask)이 Ganache 계정인지 확인하세요.`;
+                simulationStatusDiv.innerText = `❌ 트랜잭션 실패: ${error.message}. BNB Testnet에 연결되었는지, 해당 계정이 테스트넷에 잔액이 있는지 확인하세요.`;
                 simulationStatusDiv.className = 'status-box error';
                 console.error(error);
             }
