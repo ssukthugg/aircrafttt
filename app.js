@@ -251,7 +251,7 @@ async function uploadMaintenanceRecords() {
                 const tx = await maintenanceContract.methods.recordMaintenance(recordsToSend)
                     .send({ 
                         from: adminAccount, 
-                        gas: 30000000 // 배치 처리를 위한 충분한 가스 한도
+                        gas: 80000000 // 배치 처리를 위한 충분한 가스 한도
                     });
 
                 simulationStatusDiv.innerText = `✅ 시뮬레이션 성공! ${recordsToSend.length}개 기록이 블록 ${tx.blockNumber}에 기록되었습니다.`;
