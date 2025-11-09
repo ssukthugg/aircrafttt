@@ -250,7 +250,7 @@ async function uploadMaintenanceRecords() {
                 const tx = await maintenanceContract.methods.recordMaintenance(recordsToSend)
                     .send({ 
                         from: adminAccount, 
-                        gas: 8000000 // 배치 처리를 위한 충분한 가스 한도
+                        gas: 20000000 // 배치 처리를 위한 충분한 가스 한도
                     });
                 let firstRecordId = '0'; 
                     
