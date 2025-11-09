@@ -252,14 +252,32 @@ async function uploadMaintenanceRecords() {
                         from: adminAccount, 
                         //gas: 20000000 // 배치 처리를 위한 충분한 가스 한도
                     });
-                let firstRecordId = '0'; 
                     
-                    if (tx.events && tx.events.RecordSaved && tx.events.RecordSaved.length > 0) {
-                        // 배치 트랜잭션이 성공하면, 'RecordSaved' 이벤트가 기록 개수만큼 발생합니다.
-                        // 첫 번째 이벤트 로그에서 'recordId' 값을 추출합니다.
-                        // 만약 recordsToSend에 30개의 기록이 있었다면, tx.events.RecordSaved[0]은 ID 31번을 포함합니다.
-                        firstRecordId = tx.events.RecordSaved[0].returnValues.recordId;
+                // 🚨🚨 ID 추출 로직 강화 (tx.logs 사용) 🚨🚨
+                let firstRecordId = '확인 불가'; 
+                
+                // RecordSaved 이벤트의 ABI 구조를 정의합니다. (Abi의 anonymous: false에 해당)
+                const recordSavedAbi = CONTRACT_ABI.find(abi => abi.name === 'RecordSaved');
+
+                if (tx.logs && tx.logs.length > 0 && recordSavedAbi) {
+                    // tx.logs 배열을 순회하며 첫 번째 RecordSaved 이벤트를 찾습니다.
+                    for (const log of tx.logs) {
+                        // 로그의 토픽이 RecordSaved 이벤트의 시그니처와 일치하는지 확인
+                        if (log.topics[0] === web3.eth.abi.encodeEventSignature(recordSavedAbi)) {
+                            // 이벤트 로그 데이터 디코딩
+                            const decodedLog = web3.eth.abi.decodeLog(
+                                recordSavedAbi.inputs,
+                                log.data,
+                                log.topics.slice(1) // topics[0]은 서명이므로 제거
+                            );
+                            
+                            // 추출된 ID를 저장하고 루프 종료
+                            firstRecordId = decodedLog.recordId;
+                            break; 
+                        }
                     }
+                }
+                // 🚨🚨 ID 추출 로직 종료 🚨🚨
                     
                 simulationStatusDiv.innerText = `✅ Simulation Success! ${recordsToSend.length} records written to block ${tx.blockNumber} (starting ID: ${firstRecordId}) `;
                 simulationStatusDiv.className = 'status-box success';
