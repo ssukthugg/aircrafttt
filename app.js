@@ -252,8 +252,16 @@ async function uploadMaintenanceRecords() {
                         from: adminAccount, 
                         gas: 8000000 // 배치 처리를 위한 충분한 가스 한도
                     });
-
-                simulationStatusDiv.innerText = `✅ Simulation Success! ${recordsToSend.length} records written to block ${tx.blockNumber}.`;
+                let firstRecordId = '0'; 
+                    
+                    if (tx.events && tx.events.RecordSaved && tx.events.RecordSaved.length > 0) {
+                        // 배치 트랜잭션이 성공하면, 'RecordSaved' 이벤트가 기록 개수만큼 발생합니다.
+                        // 첫 번째 이벤트 로그에서 'recordId' 값을 추출합니다.
+                        // 만약 recordsToSend에 30개의 기록이 있었다면, tx.events.RecordSaved[0]은 ID 31번을 포함합니다.
+                        firstRecordId = tx.events.RecordSaved[0].returnValues.recordId;
+                    }
+                    
+                simulationStatusDiv.innerText = `✅ Simulation Success! ${recordsToSend.length} records written to block ${tx.blockNumber} (starting ID: ${firstRecordId}) `;
                 simulationStatusDiv.className = 'status-box success';
 
             } catch (error) {
