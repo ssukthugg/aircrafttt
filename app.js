@@ -6,7 +6,7 @@ let contract;
 let chartInstance = null; // To store the Chart.js instance
 
 // Deployed Contract Address (BNB Testnet)
-const CONTRACT_ADDRESS = "0x5565bfdc758f123dfb7fa6eeeadeff5f91ae6a056bcc629801707fd60b97039d"; 
+const CONTRACT_ADDRESS = "0x790bAf11120bbc2005853793a737482C4e33cDBe"; 
 
 // ABI for the Contract (includes only necessary functions)
 const CONTRACT_ABI = [
