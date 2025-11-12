@@ -1,15 +1,14 @@
-// app.js (핵심 로직)
-
+// =========================================================================
+// Global Variables and Constants
+// =========================================================================
 let web3;
-let maintenanceContract;
-let residualValueChartInstance = null; // 그래프 인스턴스
-const statusDiv = document.getElementById('status');
-const simulationStatusDiv = document.getElementById('simulationStatus');
+let contract;
+let chartInstance = null; // To store the Chart.js instance
 
-// 🚨🚨 사용자 정의 변수: 여기에 당신의 실제 값을 넣어주세요! 🚨🚨
-// 1. truffle migrate 후 나온 실제 컨트랙트 주소
-const CONTRACT_ADDRESS = '0xA088bd84aF1674438b038C400F326c8993Bde630'; 
-// 2. AircraftMaintenanceHistory.json 파일의 "abi" 항목 전체를 복사하여 넣으세요.
+// Deployed Contract Address (BNB Testnet)
+const CONTRACT_ADDRESS = "0x428246B87dD142cF116d49F2e1dd32094cF69031"; 
+
+// ABI for the Contract (includes only necessary functions)
 const CONTRACT_ABI = [
     {
       "inputs": [
@@ -28,11 +27,17 @@ const CONTRACT_ABI = [
         {
           "indexed": false,
           "internalType": "uint256",
-          "name": "recordId",
+          "name": "fileId",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "ipfsHash",
+          "type": "string"
         }
       ],
-      "name": "RecordSaved",
+      "name": "FileHashRecorded",
       "type": "event"
     },
     {
@@ -63,16 +68,11 @@ const CONTRACT_ABI = [
           "type": "uint256"
         }
       ],
-      "name": "maintenanceRecords",
+      "name": "fileHashes",
       "outputs": [
         {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        },
-        {
           "internalType": "string",
-          "name": "contents",
+          "name": "",
           "type": "string"
         }
       ],
@@ -83,25 +83,19 @@ const CONTRACT_ABI = [
     {
       "inputs": [
         {
-          "components": [
-            {
-              "internalType": "uint256",
-              "name": "id",
-              "type": "uint256"
-            },
-            {
-              "internalType": "string",
-              "name": "contents",
-              "type": "string"
-            }
-          ],
-          "internalType": "struct AircraftMaintenanceHistory.MaintenanceRecord[]",
-          "name": "_records",
-          "type": "tuple[]"
+          "internalType": "string",
+          "name": "_ipfsHash",
+          "type": "string"
         }
       ],
-      "name": "recordMaintenance",
-      "outputs": [],
+      "name": "addFileHash",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -109,243 +103,396 @@ const CONTRACT_ABI = [
       "inputs": [
         {
           "internalType": "uint256",
-          "name": "id",
+          "name": "_fileId",
           "type": "uint256"
         }
       ],
-      "name": "getMaintenanceRecord",
+      "name": "getFileHash",
       "outputs": [
         {
-          "components": [
-            {
-              "internalType": "uint256",
-              "name": "id",
-              "type": "uint256"
-            },
-            {
-              "internalType": "string",
-              "name": "contents",
-              "type": "string"
-            }
-          ],
-          "internalType": "struct AircraftMaintenanceHistory.MaintenanceRecord",
+          "internalType": "string",
           "name": "",
-          "type": "tuple"
+          "type": "string"
         }
       ],
       "stateMutability": "view",
       "type": "function",
       "constant": true
     }
-]; 
-// 🚨🚨 끝 🚨🚨
+];
 
-// --- 1. Wallet Connection and Contract Initialization ---
-async function connectWallet() {
-    if (typeof window.ethereum !== 'undefined') {
+const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+
+
+// =========================================================================
+// UI Functions (Defined as global functions for HTML onclick stability)
+// =========================================================================
+
+/**
+ * Sets the active tab view.
+ * @param {string} tabName - The name of the tab (e.g., 'upload', 'view').
+ */
+function setActiveTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-button').forEach(el => {
+        el.classList.remove('border-blue-600', 'text-blue-600');
+        el.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+    });
+
+    document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.remove('hidden');
+    const activeTabButton = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    activeTabButton.classList.add('border-blue-600', 'text-blue-600');
+    activeTabButton.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+}
+
+
+// =========================================================================
+// Web3 and Wallet Connection
+// =========================================================================
+
+/**
+ * Initializes Web3 and connects to MetaMask.
+ */
+async function initWeb3() {
+    if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
-            // 사용자에게 MetaMask 연결 승인 요청
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            // Request account access
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+            updateStatus();
             
-            // 컨트랙트 객체 생성
-            maintenanceContract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-            
-            statusDiv.innerText = `✅ MetaMask Connected. Account: ${accounts[0].substring(0, 8)}...`;
-            statusDiv.className = 'status-box success';
-            
-            simulationStatusDiv.innerText = 'Verify connection to BNB Testnet and select a CSV file.';
+            // Listen for account or network changes
+            window.ethereum.on('accountsChanged', updateStatus);
+            window.ethereum.on('chainChanged', () => { window.location.reload(); });
 
         } catch (error) {
-            statusDiv.innerText = `❌ MetaMask Connection Failed: ${error.message}`;
-            statusDiv.className = 'status-box error';
+            console.error("MetaMask connection failed:", error);
+            document.getElementById('accountStatus').textContent = "Wallet Status: Connection Failed (Check MetaMask)";
         }
     } else {
-        statusDiv.innerText = '❌ Please install and connect MetaMask to your browser.';
-        statusDiv.className = 'status-box error';
+        document.getElementById('accountStatus').textContent = "Wallet Status: Please install MetaMask!";
     }
 }
 
-// --- 2. Residual Value Chart Visualization ---
-function drawResidualValueChart(data) {
-    const ctx = document.getElementById('residualValueChart').getContext('2d');
-    
-    // CSV 데이터에서 날짜와 RV 값 추출
-    const labels = data.map(row => row['Date']); 
-    // RV 값에서 통화 기호나 콤마를 제거하고 숫자로 변환
-    const residualValues = data.map(row => 
-        parseFloat(String(row['RV (Residual Value) (USD)']).replace(/[$,]/g, ''))
-    ); 
+/**
+ * Updates the wallet connection status (account, balance, network).
+ */
+async function updateStatus() {
+    if (!web3) return;
 
-    // 기존 차트가 있으면 삭제
-    if (residualValueChartInstance) {
-        residualValueChartInstance.destroy();
+    const accounts = await web3.eth.getAccounts();
+    const selectedAccount = accounts[0];
+    const networkId = await web3.eth.net.getId();
+    
+    // Check for BNB Testnet (ID 97)
+    if (networkId.toString() !== '97') {
+            document.getElementById('networkStatus').innerHTML = `Network ID: <span class="text-red-500 font-bold">ERROR: Connect to BNB Testnet (ID 97)</span>`;
+    } else {
+        document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
     }
 
-    // Chart.js를 사용하여 새 차트 생성
-    residualValueChartInstance = new Chart(ctx, {
-        type: 'line', 
+    if (selectedAccount) {
+        const balanceWei = await web3.eth.getBalance(selectedAccount);
+        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
+        document.getElementById('accountStatus').textContent = `Account: ${selectedAccount.substring(0, 6)}...${selectedAccount.substring(38)}`;
+        document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
+        document.getElementById('recordButton').disabled = false;
+    } else {
+        document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
+        document.getElementById('recordButton').disabled = true;
+    }
+}
+
+
+// =========================================================================
+// 1. IPFS Upload (Pinata Simulation)
+// =========================================================================
+
+/**
+ * Uploads the file to IPFS via Pinata service.
+ * @param {File} file - The file to upload.
+ * @param {string} apiKey - Pinata API Key.
+ * @param {string} apiSecret - Pinata Secret Key.
+ * @returns {Promise<string>} The IPFS Content Identifier (CID).
+ */
+async function uploadToIPFS(file, apiKey, apiSecret) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const pinataMetadata = JSON.stringify({ name: file.name });
+    formData.append('pinataMetadata', pinataMetadata);
+
+    try {
+        const response = await fetch(PINATA_URL, {
+            method: 'POST',
+            headers: {
+                // Pinata requires Basic Auth using the keys
+                'Authorization': 'Basic ' + btoa(apiKey + ':' + apiSecret)
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Pinata API Error: ' + response.status + ' - ' + errorText.substring(0, 100) + '...');
+        }
+        
+        const json = await response.json();
+        return json.IpfsHash; // Return the CID
+        
+    } catch (error) {
+        console.error("IPFS Upload Error:", error);
+        throw new Error("Failed to upload file to IPFS: " + error.message);
+    }
+}
+
+// =========================================================================
+// 2. Blockchain Recording
+// =========================================================================
+
+/**
+ * Records the IPFS hash (CID) onto the smart contract.
+ * @param {string} ipfsFileHash - The CID of the uploaded file.
+ * @returns {Promise<string>} The File ID (Record ID) generated by the contract.
+ */
+async function recordMaintenanceHistory(ipfsFileHash) {
+    const accounts = await web3.eth.getAccounts();
+    const adminAccount = accounts[0];
+    
+    document.getElementById('uploadStatus').textContent = `3. Recording Maintenance Data CID to Blockchain... (Admin: ${adminAccount.substring(0, 6)}...)`;
+
+    try {
+        const tx = await contract.methods.addFileHash(ipfsFileHash)
+            .send({
+                from: adminAccount
+            });
+        
+        // Extract fileId (Record ID) from the event log
+        const fileId = tx.events.FileHashRecorded.returnValues.fileId;
+
+        document.getElementById('uploadStatus').innerHTML = `✅ **SUCCESS!** Maintenance Record CID recorded. (File ID: <span class="font-bold text-green-600">${fileId}</span>) <br>Tx Hash: ${tx.transactionHash.substring(0, 10)}...`;
+        
+        return fileId;
+
+    } catch (error) {
+        document.getElementById('uploadStatus').textContent = `❌ Blockchain Recording Failed: ${error.message}`;
+        console.error("Blockchain transaction error:", error);
+        throw new Error("Blockchain recording failed.");
+    }
+}
+
+// =========================================================================
+// Upload Handler
+// =========================================================================
+
+/**
+ * Main function to handle the entire upload and record process.
+ */
+async function handleUploadAndRecord() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiSecret = document.getElementById('apiSecret').value.trim();
+    const fileInput = document.getElementById('fileInput'); 
+    const file = fileInput.files[0];
+    const button = document.getElementById('recordButton');
+
+    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
+    if (!apiKey || !apiSecret) return alert("Please enter your Pinata API Key and Secret Key.");
+    if (!file) return alert("Please select a CSV file containing maintenance data to upload.");
+
+    button.disabled = true;
+    button.textContent = "Processing...";
+    document.getElementById('uploadStatus').textContent = "1. Starting upload process...";
+
+    try {
+        // 1. IPFS Upload
+        document.getElementById('uploadStatus').textContent = "2. Uploading file to IPFS via Pinata...";
+        const ipfsFileHash = await uploadToIPFS(file, apiKey, apiSecret);
+        
+        document.getElementById('uploadStatus').textContent = `2. IPFS Upload Success! CID: ${ipfsFileHash.substring(0, 10)}...`;
+
+        // 2. Blockchain Record
+        await recordMaintenanceHistory(ipfsFileHash);
+
+    } catch (error) {
+        console.error("Total process error:", error);
+        document.getElementById('uploadStatus').textContent = `❌ Total Process Failed: ${error.message}`;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Upload to IPFS and Record CID on Blockchain";
+    }
+}
+
+
+// =========================================================================
+// 3 & 4. Data Retrieval and Analysis
+// =========================================================================
+
+/**
+ * Parses CSV text into an HTML table and extracts data for charting.
+ * @param {string} csvText - The raw CSV content.
+ * @returns {Array<{date: string, value: number}>} Data points for the chart.
+ */
+function csvToHtmlTable(csvText) {
+    const lines = csvText.trim().split(/\r?\n/);
+    if (lines.length === 0) return '<tr><td colspan="100%">No data found.</td></tr>';
+
+    const table = document.createElement('table');
+    const thead = table.createTHead();
+    const tbody = table.createTBody();
+
+    // 1. Parse Headers (First Line)
+    const headers = lines[0].split(',');
+    const headerRow = thead.insertRow();
+    headers.forEach(header => {
+        const th = document.createElement('th');
+        // Clean headers of quotes and whitespace
+        th.textContent = header.trim().replace(/"/g, ''); 
+        headerRow.appendChild(th);
+    });
+
+    // 2. Parse Body and Extract Chart Data
+    const dataForChart = [];
+    for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') continue;
+        const cells = lines[i].split(',');
+        const row = tbody.insertRow();
+
+        let date, residualValue;
+
+        cells.forEach((cell, index) => {
+            const td = row.insertCell();
+            const value = cell.trim().replace(/"/g, '');
+            td.textContent = value;
+            
+            // Heuristic check for relevant columns
+            const headerName = headers[index].trim().toLowerCase();
+            if (headerName.includes('date') || headerName.includes('inspection')) { 
+                date = value;
+            }
+            if (headerName.includes('residual') || headerName.includes('잔존가치')) { 
+                residualValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+            }
+        });
+        
+        if (date && !isNaN(residualValue)) {
+            dataForChart.push({ date: date, value: residualValue });
+        }
+    }
+
+    document.getElementById('dataTable').innerHTML = '';
+    document.getElementById('dataTable').appendChild(table);
+    
+    return dataForChart;
+}
+
+/**
+ * Renders the Chart.js line graph for residual value trend.
+ * @param {Array<{date: string, value: number}>} data - The data points.
+ */
+function renderResidualValueChart(data) {
+    const ctx = document.getElementById('residualValueChart').getContext('2d');
+
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
+    
+    chartInstance = new Chart(ctx, {
+        type: 'line',
         data: {
-            labels: labels,
+            labels: data.map(item => item.date),
             datasets: [{
                 label: 'Residual Value (USD)',
-                data: residualValues,
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1,
-                fill: false
+                data: data.map(item => item.value),
+                backgroundColor: 'rgba(79, 70, 229, 0.5)',
+                borderColor: 'rgb(79, 70, 229)',
+                tension: 0.3,
+                fill: true
             }]
         },
         options: {
             responsive: true,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: true, text: 'Aircraft Residual Value Trend Over Time' }
+            },
             scales: {
-                x: {
-                    title: { display: true, text: 'Date' }
-                },
-                y: {
-                    title: { display: true, text: 'Residual Value (USD)' },
-                    beginAtZero: false
-                }
+                y: { beginAtZero: false, title: { display: true, text: 'Residual Value (USD)' } },
+                x: { title: { display: true, text: 'Date of Maintenance/Inspection' } }
             }
         }
     });
 }
 
-// --- 3. 메인: CSV 업로드 및 블록체인 전송 ---
-async function uploadMaintenanceRecords() {
-    if (!maintenanceContract) {
-        return alert("MetaMask connection and contract initialization are required.");
-    }
+/**
+ * Main function to retrieve the record, fetch data from IPFS, and visualize it.
+ */
+async function viewRecordAndAnalyze() {
+    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
 
-    const fileInput = document.getElementById('csvFileInput');
-    const file = fileInput.files[0];
-    if (!file) return alert("Please select a CSV file.");
-
-    simulationStatusDiv.innerText = 'Parsing data and generating chart...';
-    simulationStatusDiv.className = 'status-box';
-
-    // Papa Parse를 사용하여 파일 읽기
-    Papa.parse(file, {
-        header: true, 
-        skipEmptyLines: true,
-        complete: async function(results) {
-            const records = results.data;
-            
-            // 1. 잔존 가치 그래프 시각화
-            drawResidualValueChart(records);
-            
-            // 2. 블록체인 전송용 데이터 준비
-            const recordsToSend = records.map(record => {
-                const contents = JSON.stringify(record);
-                // 컨트랙트 형식: [id=0, contents_string]
-                return [0, contents]; 
-            });
-            
-            // 3. 블록체인 트랜잭션 실행
-            const accounts = await web3.eth.getAccounts();
-            const adminAccount = accounts[0]; 
-
-            simulationStatusDiv.innerText = `Sending ${recordsToSend.length} records to BNB Testnet. Please check the MetaMask window.`;
-
-            try {
-                const tx = await maintenanceContract.methods.recordMaintenance(recordsToSend)
-                    .send({ 
-                        from: adminAccount, 
-                        //gas: 20000000 // 배치 처리를 위한 충분한 가스 한도
-                    });
-                    
-                // 🚨🚨 ID 추출 로직 강화 (tx.logs 사용) 🚨🚨
-                let firstRecordId = '확인 불가'; 
-                
-                // RecordSaved 이벤트의 ABI 구조를 정의합니다. (Abi의 anonymous: false에 해당)
-                const recordSavedAbi = CONTRACT_ABI.find(abi => abi.name === 'RecordSaved');
-
-                if (tx.logs && tx.logs.length > 0 && recordSavedAbi) {
-                    // tx.logs 배열을 순회하며 첫 번째 RecordSaved 이벤트를 찾습니다.
-                    for (const log of tx.logs) {
-                        // 로그의 토픽이 RecordSaved 이벤트의 시그니처와 일치하는지 확인
-                        if (log.topics[0] === web3.eth.abi.encodeEventSignature(recordSavedAbi)) {
-                            // 이벤트 로그 데이터 디코딩
-                            const decodedLog = web3.eth.abi.decodeLog(
-                                recordSavedAbi.inputs,
-                                log.data,
-                                log.topics.slice(1) // topics[0]은 서명이므로 제거
-                            );
-                            
-                            // 추출된 ID를 저장하고 루프 종료
-                            firstRecordId = decodedLog.recordId;
-                            break; 
-                        }
-                    }
-                }
-                // 🚨🚨 ID 추출 로직 종료 🚨🚨
-                    
-                simulationStatusDiv.innerText = `✅ Simulation Success! ${recordsToSend.length} records written to block ${tx.blockNumber} (starting ID: ${firstRecordId}) `;
-                simulationStatusDiv.className = 'status-box success';
-
-            } catch (error) {
-                simulationStatusDiv.innerText = `❌ Transaction Failed: ${error.message}. Verify that you are connected to the BNB Testnet and that the account has sufficient balance.`;
-                simulationStatusDiv.className = 'status-box error';
-                console.error(error);
-            }
-        },
-        error: function(err) {
-            simulationStatusDiv.innerText = `❌ CSV Parsing Error: ${err.message}`;
-            simulationStatusDiv.className = 'status-box error';
-        }
-    });
-}
-
-// --- 4. 블록체인 기록 조회 함수 ---
-async function searchRecord() {
-    if (!maintenanceContract) {
-        return alert("MetaMask connection is required.");
-    }
-
-    const recordId = document.getElementById('recordIdInput').value;
-    const resultStatusDiv = document.getElementById('searchResultStatus');
-    const displayArea = document.getElementById('recordDisplayArea');
+    const fileId = document.getElementById('recordIdInput').value;
+    const viewButton = document.getElementById('viewButton');
+    const statusDiv = document.getElementById('viewStatus');
     
-    // 입력값 검증
-    if (!recordId || recordId <= 0) {
-        resultStatusDiv.innerText = "❌ Please enter a valid Record ID..";
-        resultStatusDiv.className = 'status-box error';
-        displayArea.innerHTML = '';
+    if (!fileId || isNaN(fileId) || fileId <= 0) {
+        statusDiv.textContent = "Please enter a valid Maintenance Record ID (e.g., 1).";
         return;
     }
+
+    viewButton.disabled = true;
+    viewButton.textContent = "Searching...";
+    statusDiv.textContent = `1. Querying Blockchain for Maintenance Record ID ${fileId}...`;
     
-    resultStatusDiv.innerText = `Retrieving Record ID ${recordId}...`;
-    resultStatusDiv.className = 'status-box';
-    displayArea.innerHTML = '';
-
     try {
-        // 컨트랙트의 getMaintenanceRecord 함수 호출 (읽기 트랜잭션 - 가스비 0)
-        const record = await maintenanceContract.methods.getMaintenanceRecord(recordId).call();
-
-        if (record.contents === "") {
-             // 컨트랙트가 ID 0 또는 존재하지 않는 ID에 대해 빈 값을 반환할 경우
-            resultStatusDiv.innerText = `⚠️ Record ID ${recordId} not found.`;
-            resultStatusDiv.className = 'status-box warning';
-            return;
+        // 1. Retrieve CID from Blockchain
+        const ipfsHash = await contract.methods.getFileHash(fileId).call();
+        
+        if (ipfsHash.length === 0 || ipfsHash === '0x') {
+            throw new Error(`Maintenance Record ID ${fileId} not found on the blockchain. The record may not exist or the ID is invalid.`);
         }
 
-        // 결과 표시를 위해 JSON 문자열을 객체로 변환
-        const recordData = JSON.parse(record.contents);
+        statusDiv.textContent = `2. CID Found: ${ipfsHash.substring(0, 10)}... Fetching data from IPFS Gateway...`;
+
+        // 2. Fetch CSV data from IPFS Gateway
+        const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+        // Using a proxy is often necessary to avoid CORS issues when fetching external IPFS content
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
         
-        resultStatusDiv.innerText = `✅ Record ID ${recordId} successfully retrieved.`;
-        resultStatusDiv.className = 'status-box success';
-        
-        // 데이터를 HTML 테이블 형태로 표시
-        let htmlContent = '<table>';
-        for (const key in recordData) {
-            htmlContent += `<tr><th>${key}</th><td>${recordData[key]}</td></tr>`;
+        const response = await fetch(proxyUrl);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
         }
-        htmlContent += '</table>';
+
+        const csvText = await response.text();
         
-        displayArea.innerHTML = htmlContent;
+        // 3. Parse CSV and extract data for table/chart
+        const dataForChart = csvToHtmlTable(csvText);
+        
+        // 4. Render Chart
+        renderResidualValueChart(dataForChart);
+
+        statusDiv.innerHTML = `✅ **SUCCESS!** Data retrieved and analyzed. CID: <a href="${gatewayUrl}" target="_blank" class="text-blue-600 underline">${ipfsHash}</a>`;
 
     } catch (error) {
-        resultStatusDiv.innerText = `❌ Retrieval Failed: ${error.message}`;
-        resultStatusDiv.className = 'status-box error';
-        console.error(error);
+        document.getElementById('dataTable').innerHTML = `<p class="p-4 text-red-500">Error: Failed to retrieve or process data.</p>`;
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        console.error("View/Analyze Error:", error);
+    } finally {
+        viewButton.disabled = false;
+        viewButton.textContent = "Retrieve Record and Start Analysis";
     }
 }
+
+// =========================================================================
+// Initialization
+// =========================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    initWeb3();
+    document.getElementById('recordButton').disabled = true; // Disable until MetaMask is connected
+    setActiveTab('upload'); // Set default tab (now calls the globally defined function)
+});
+
+// Note: Functions defined globally (without 'const' or 'let' and outside a module) 
+// are automatically attached to the 'window' object and are visible to HTML onclick handlers.
