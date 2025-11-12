@@ -227,8 +227,9 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         const response = await fetch(PINATA_URL, {
             method: 'POST',
             headers: {
-                // Pinata requires Basic Auth using the keys
-                'Authorization': 'Basic ' + btoa(apiKey + ':' + apiSecret)
+                // FIX: Changing from Basic Auth to Pinata's required custom headers for file upload
+                'pinata_api_key': apiKey,
+                'pinata_secret_api_key': apiSecret
             },
             body: formData,
         });
@@ -243,7 +244,8 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         
     } catch (error) {
         console.error("IPFS Upload Error:", error);
-        throw new Error("Failed to upload file to IPFS: " + error.message);
+        // Error message is updated to reflect that the keys might be wrong or the network is unreachable
+        throw new Error("Failed to upload file to IPFS. Check Pinata API Keys and permissions.");
     }
 }
 
