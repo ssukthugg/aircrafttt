@@ -227,7 +227,7 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         const response = await fetch(PINATA_URL, {
             method: 'POST',
             headers: {
-                // FIX: Changing from Basic Auth to Pinata's required custom headers for file upload
+                // Pinata requires custom headers for file upload
                 'pinata_api_key': apiKey,
                 'pinata_secret_api_key': apiSecret
             },
@@ -244,8 +244,7 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         
     } catch (error) {
         console.error("IPFS Upload Error:", error);
-        // Error message is updated to reflect that the keys might be wrong or the network is unreachable
-        throw new Error("Failed to upload file to IPFS. Check Pinata API Keys and permissions.");
+        throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
     }
 }
 
@@ -278,7 +277,21 @@ async function recordMaintenanceHistory(ipfsFileHash) {
         return fileId;
 
     } catch (error) {
-        document.getElementById('uploadStatus').textContent = `❌ Blockchain Recording Failed: ${error.message}`;
+        // IMPROVED ERROR HANDLING
+        let errorMessage = "Blockchain recording failed.";
+        
+        // Check for specific error types (Insufficient funds, revert, etc.)
+        if (error.message && error.message.includes("insufficient funds")) {
+            errorMessage = "Blockchain Recording Failed: Insufficient tBNB balance for gas.";
+        } else if (error.message && (error.message.includes("revert") || error.message.includes("denied"))) {
+            errorMessage = "Blockchain Recording Failed: Transaction reverted. **Possible Admin/Permission issue** or contract logic error.";
+        } else if (error.message && error.message.includes("User denied transaction signature")) {
+            errorMessage = "Blockchain Recording Failed: Transaction was manually rejected by the user.";
+        } else {
+            errorMessage = `Blockchain Recording Failed: ${error.message.substring(0, 100)}...`;
+        }
+
+        document.getElementById('uploadStatus').textContent = `❌ ${errorMessage}`;
         console.error("Blockchain transaction error:", error);
         throw new Error("Blockchain recording failed.");
     }
@@ -318,6 +331,7 @@ async function handleUploadAndRecord() {
 
     } catch (error) {
         console.error("Total process error:", error);
+        // Display the detailed error from the failed step (IPFS or Blockchain)
         document.getElementById('uploadStatus').textContent = `❌ Total Process Failed: ${error.message}`;
     } finally {
         button.disabled = false;
