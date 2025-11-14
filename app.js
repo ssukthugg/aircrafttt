@@ -288,11 +288,7 @@ async function viewRecordAndAnalyze() {
         // 2. Fetch CSV data from IPFS Gateway
         const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
         
-        // --- MODIFICATION: Removed unreliable CORS proxy and using direct gateway fetch ---
-        // Old: const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
-        // Old: const response = await fetch(proxyUrl);
-        const response = await fetch(gatewayUrl); // Try direct fetch first
-        // --------------------------------------------------------------------------------
+        const response = await fetch(gatewayUrl); 
         
         if (!response.ok) {
             throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
@@ -481,7 +477,8 @@ function csvToHtmlTable(csvText) {
     headers.forEach(header => {
         const th = document.createElement('th');
         // Clean headers of quotes and whitespace
-        th.textContent = header.trim().replace(/"/g, ''); 
+        const headerValue = (header || '').trim().replace(/"/g, ''); // Safety check added here too
+        th.textContent = headerValue; 
         headerRow.appendChild(th);
     });
 
@@ -496,7 +493,11 @@ function csvToHtmlTable(csvText) {
 
         cells.forEach((cell, index) => {
             const td = row.insertCell();
-            const value = cell.trim().replace(/"/g, '');
+            
+            // --- FIX APPLIED HERE: Ensure 'cell' is not undefined before calling trim() ---
+            const value = (cell || '').trim().replace(/"/g, '');
+            // -----------------------------------------------------------------------------
+            
             td.textContent = value;
             
             // Heuristic check for relevant columns
@@ -505,6 +506,7 @@ function csvToHtmlTable(csvText) {
                 date = value;
             }
             if (headerName.includes('residual') || headerName.includes('잔존가치') || headerName.includes('value')) { 
+                // Enhanced cleaning for numerical values, removing non-digit/non-dot characters
                 residualValue = parseFloat(value.replace(/[^0-9.]/g, ''));
             }
         });
