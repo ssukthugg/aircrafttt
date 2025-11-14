@@ -287,16 +287,28 @@ async function viewRecordAndAnalyze() {
 
         // 2. Fetch CSV data from IPFS Gateway
         const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-        // Using a proxy is often necessary to avoid CORS issues when fetching external IPFS content
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
         
-        const response = await fetch(proxyUrl);
-
+        // --- MODIFICATION: Removed unreliable CORS proxy and using direct gateway fetch ---
+        // Old: const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
+        // Old: const response = await fetch(proxyUrl);
+        const response = await fetch(gatewayUrl); // Try direct fetch first
+        // --------------------------------------------------------------------------------
+        
         if (!response.ok) {
             throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
         }
 
         const csvText = await response.text();
+        
+        // --- CRITICAL DEBUGGING LOG ---
+        console.log("--- RAW DATA RETRIEVED FROM IPFS GATEWAY ---");
+        console.log(csvText.substring(0, 500) + (csvText.length > 500 ? '...' : ''));
+        console.log("-------------------------------------------");
+        // ------------------------------
+        
+        if (csvText.length === 0) {
+             throw new Error("Retrieved data is empty. Check the file content on Pinata and the gateway status.");
+        }
         
         // 3. Parse CSV and extract data for table/chart
         const dataForChart = csvToHtmlTable(csvText);
@@ -449,8 +461,15 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
  * @returns {Array<{date: string, value: number}>} Data points for the chart.
  */
 function csvToHtmlTable(csvText) {
+    // --- CRITICAL DEBUGGING CHECK ---
+    if (!csvText || typeof csvText !== 'string' || csvText.trim().length === 0) {
+        console.error("CSV Parsing Error: Input text is not a valid string or is empty.");
+        throw new Error("CSV Parsing failed: Retrieved data is empty or malformed.");
+    }
+    // --------------------------------
+    
     const lines = csvText.trim().split(/\r?\n/);
-    if (lines.length === 0) return '<tr><td colspan="100%">No data found.</td></tr>';
+    if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
 
     const table = document.createElement('table');
     const thead = table.createTHead();
@@ -485,7 +504,7 @@ function csvToHtmlTable(csvText) {
             if (headerName.includes('date') || headerName.includes('inspection')) { 
                 date = value;
             }
-            if (headerName.includes('residual') || headerName.includes('잔존가치')) { 
+            if (headerName.includes('residual') || headerName.includes('잔존가치') || headerName.includes('value')) { 
                 residualValue = parseFloat(value.replace(/[^0-9.]/g, ''));
             }
         });
