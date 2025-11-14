@@ -464,6 +464,10 @@ function csvToHtmlTable(csvText) {
     }
     // --------------------------------
     
+    // Regex to split CSV by comma, but ignore commas inside double quotes.
+    // This is required because fields like "Value, with comma" break simple .split(',')
+    const CSV_SPLIT_REGEX = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+
     const lines = csvText.trim().split(/\r?\n/);
     if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
 
@@ -472,12 +476,12 @@ function csvToHtmlTable(csvText) {
     const tbody = table.createTBody();
 
     // 1. Parse Headers (First Line)
-    const headers = lines[0].split(',');
+    const headers = lines[0].split(CSV_SPLIT_REGEX);
     const headerRow = thead.insertRow();
     headers.forEach(header => {
         const th = document.createElement('th');
         // Clean headers of quotes and whitespace
-        const headerValue = (header || '').trim().replace(/"/g, ''); // Safety check added here too
+        const headerValue = (header || '').trim().replace(/"/g, ''); 
         th.textContent = headerValue; 
         headerRow.appendChild(th);
     });
@@ -486,7 +490,11 @@ function csvToHtmlTable(csvText) {
     const dataForChart = [];
     for (let i = 1; i < lines.length; i++) {
         if (lines[i].trim() === '') continue;
-        const cells = lines[i].split(',');
+        
+        // --- FIX APPLIED HERE: Use RegEx Split to ignore commas inside quoted fields ---
+        const cells = lines[i].split(CSV_SPLIT_REGEX); 
+        // --------------------------------------------------------------------------
+        
         const row = tbody.insertRow();
 
         let date, residualValue;
@@ -494,18 +502,17 @@ function csvToHtmlTable(csvText) {
         cells.forEach((cell, index) => {
             const td = row.insertCell();
             
-            // --- FIX APPLIED HERE: Ensure 'cell' is not undefined before calling trim() ---
+            // Ensure 'cell' is not undefined before calling trim(), and remove surrounding quotes
             const value = (cell || '').trim().replace(/"/g, '');
-            // -----------------------------------------------------------------------------
             
             td.textContent = value;
             
             // Heuristic check for relevant columns
-            const headerName = headers[index].trim().toLowerCase();
+            const headerName = (headers[index] || '').trim().toLowerCase();
             if (headerName.includes('date') || headerName.includes('inspection')) { 
                 date = value;
             }
-            if (headerName.includes('residual') || headerName.includes('잔존가치') || headerName.includes('value')) { 
+            if (headerName.includes('residual') || headerName.includes('rv') || headerName.includes('value')) { 
                 // Enhanced cleaning for numerical values, removing non-digit/non-dot characters
                 residualValue = parseFloat(value.replace(/[^0-9.]/g, ''));
             }
