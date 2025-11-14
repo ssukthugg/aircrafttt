@@ -466,12 +466,18 @@ function csvToHtmlTable(csvText) {
     const lines = csvText.trim().split(/\r?\n/);
     if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
 
+    // 1. Create a responsive wrapper for horizontal scrolling
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = "overflow-x-auto"; // Key class for horizontal scrolling
+
     const table = document.createElement('table');
     table.className = "min-w-full divide-y divide-gray-200 border border-gray-300";
     const thead = table.createTHead();
     const tbody = table.createTBody();
+    
+    tableWrapper.appendChild(table); // Append table to the new wrapper
 
-    // 1. Parse Headers (First Line) and find required indices
+    // 2. Parse Headers (First Line) and find required indices
     const headers = lines[0].split(',');
     const THEAD_ROW = thead.insertRow();
     THEAD_ROW.className = "bg-gray-50";
@@ -496,7 +502,7 @@ function csvToHtmlTable(csvText) {
 
         const th = document.createElement('th');
         th.textContent = headerValue; 
-        th.className = "px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider";
+        th.className = "px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[120px]"; // Added min-width for better column sizing
         THEAD_ROW.appendChild(th);
     });
 
@@ -504,7 +510,7 @@ function csvToHtmlTable(csvText) {
         console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'MR' (Index: ${mrIndex}) columns in CSV header.`);
     }
 
-    // 2. Parse Body and Extract Chart Data
+    // 3. Parse Body and Extract Chart Data
     const dataForChart = [];
     const expectedColumnCount = headersCleaned.length;
 
@@ -525,15 +531,13 @@ function csvToHtmlTable(csvText) {
             // Get cell content, use empty string if undefined (out of bounds due to missing trailing fields)
             const cell = cells[j] !== undefined ? cells[j] : '';
             
-            // --- FIX FOR 'TRIM' ERROR: Ensure content is a string before calling trim() ---
-            // Even with the || '' guard, this extra String() casting is the ultimate protection
+            // Ensure content is a string before calling trim()
             const value = String(cell).trim().replace(/"/g, '');
-            // -----------------------------------------------------------------------------
             
             // Populate HTML Table
             const td = row.insertCell();
             td.textContent = value;
-            td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500";
+            td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500 min-w-[120px]"; // Added min-width to cells
             
             // Extract chart data using fixed indices
             if (j === dateIndex) { 
@@ -551,7 +555,8 @@ function csvToHtmlTable(csvText) {
     }
 
     document.getElementById('dataTable').innerHTML = '';
-    document.getElementById('dataTable').appendChild(table);
+    // Append the entire wrapper (which contains the table) to the dataTable container
+    document.getElementById('dataTable').appendChild(tableWrapper);
     
     return dataForChart;
 }
