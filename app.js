@@ -453,73 +453,100 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
 
 /**
  * Parses CSV text into an HTML table and extracts data for charting.
+ * The logic is highly defensive against common CSV parsing errors (like missing cells or extra commas).
  * @param {string} csvText - The raw CSV content.
  * @returns {Array<{date: string, value: number}>} Data points for the chart.
  */
 function csvToHtmlTable(csvText) {
-    // --- CRITICAL DEBUGGING CHECK ---
     if (!csvText || typeof csvText !== 'string' || csvText.trim().length === 0) {
         console.error("CSV Parsing Error: Input text is not a valid string or is empty.");
         throw new Error("CSV Parsing failed: Retrieved data is empty or malformed.");
     }
-    // --------------------------------
     
-    // Regex to split CSV by comma, but ignore commas inside double quotes.
-    // This is required because fields like "Value, with comma" break simple .split(',')
-    const CSV_SPLIT_REGEX = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-
     const lines = csvText.trim().split(/\r?\n/);
     if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
 
     const table = document.createElement('table');
+    table.className = "min-w-full divide-y divide-gray-200 border border-gray-300";
     const thead = table.createTHead();
     const tbody = table.createTBody();
 
-    // 1. Parse Headers (First Line)
-    const headers = lines[0].split(CSV_SPLIT_REGEX);
-    const headerRow = thead.insertRow();
-    headers.forEach(header => {
+    // 1. Parse Headers (First Line) and find required indices
+    const headers = lines[0].split(',');
+    const THEAD_ROW = thead.insertRow();
+    THEAD_ROW.className = "bg-gray-50";
+
+    let dateIndex = -1;
+    let mrIndex = -1;
+    const headersCleaned = [];
+
+    headers.forEach((header, index) => {
+        const headerValue = (header || '').trim().replace(/"/g, '');
+        headersCleaned.push(headerValue);
+        
+        // Find required column indices (case-insensitive and partial match)
+        const lowerHeader = headerValue.toLowerCase();
+        if (lowerHeader.includes('date') || lowerHeader.includes('inspection')) {
+            dateIndex = index;
+        }
+        // Explicitly target the MR column as requested
+        if (lowerHeader.includes('mr (variable depr.') || lowerHeader.includes('mr (variable depr')) {
+            mrIndex = index;
+        }
+
         const th = document.createElement('th');
-        // Clean headers of quotes and whitespace
-        const headerValue = (header || '').trim().replace(/"/g, ''); 
         th.textContent = headerValue; 
-        headerRow.appendChild(th);
+        th.className = "px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider";
+        THEAD_ROW.appendChild(th);
     });
+
+    if (dateIndex === -1 || mrIndex === -1) {
+        console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'MR' (Index: ${mrIndex}) columns in CSV header.`);
+    }
 
     // 2. Parse Body and Extract Chart Data
     const dataForChart = [];
+    const expectedColumnCount = headersCleaned.length;
+
     for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim() === '') continue;
+        const line = lines[i].trim();
+        if (line === '') continue;
         
-        // --- FIX APPLIED HERE: Use RegEx Split to ignore commas inside quoted fields ---
-        const cells = lines[i].split(CSV_SPLIT_REGEX); 
-        // --------------------------------------------------------------------------
-        
+        // Use simple split (potential issue source, but we mitigate with safety checks below)
+        const cells = line.split(',');
         const row = tbody.insertRow();
+        row.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
 
-        let date, residualValue;
-
-        cells.forEach((cell, index) => {
-            const td = row.insertCell();
-            
-            // Ensure 'cell' is not undefined before calling trim(), and remove surrounding quotes
-            const value = (cell || '').trim().replace(/"/g, '');
-            
-            td.textContent = value;
-            
-            // Heuristic check for relevant columns
-            const headerName = (headers[index] || '').trim().toLowerCase();
-            if (headerName.includes('date') || headerName.includes('inspection')) { 
-                date = value;
-            }
-            if (headerName.includes('residual') || headerName.includes('rv') || headerName.includes('value')) { 
-                // Enhanced cleaning for numerical values, removing non-digit/non-dot characters
-                residualValue = parseFloat(value.replace(/[^0-9.]/g, ''));
-            }
-        });
+        let dateValue = null;
+        let mrValue = null;
         
-        if (date && !isNaN(residualValue)) {
-            dataForChart.push({ date: date, value: residualValue });
+        // Iterate up to the expected number of columns to prevent undefined access
+        for (let j = 0; j < expectedColumnCount; j++) {
+            // Get cell content, use empty string if undefined (out of bounds due to missing trailing fields)
+            const cell = cells[j] !== undefined ? cells[j] : '';
+            
+            // --- FIX FOR 'TRIM' ERROR: Ensure content is a string before calling trim() ---
+            // Even with the || '' guard, this extra String() casting is the ultimate protection
+            const value = String(cell).trim().replace(/"/g, '');
+            // -----------------------------------------------------------------------------
+            
+            // Populate HTML Table
+            const td = row.insertCell();
+            td.textContent = value;
+            td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500";
+            
+            // Extract chart data using fixed indices
+            if (j === dateIndex) { 
+                dateValue = value;
+            }
+            if (j === mrIndex) { 
+                // Enhanced cleaning for numerical values, removing currency symbols and non-digit/non-dot characters
+                mrValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+            }
+        }
+        
+        if (dateValue && !isNaN(mrValue)) {
+            dataForChart.push({ date: dateValue, value: mrValue });
         }
     }
 
@@ -540,15 +567,18 @@ function renderResidualValueChart(data) {
         chartInstance.destroy();
     }
     
+    // Sort data by date before charting (assuming YYYY-MM-DD format)
+    data.sort((a, b) => new Date(a.date) - new Date(b.date));
+
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.map(item => item.date),
             datasets: [{
-                label: 'Residual Value (USD)',
+                label: 'MR (Variable Depr. Accrual) (USD) Trend',
                 data: data.map(item => item.value),
-                backgroundColor: 'rgba(79, 70, 229, 0.5)',
-                borderColor: 'rgb(79, 70, 229)',
+                backgroundColor: 'rgba(239, 68, 68, 0.5)', // Red tone for Maintenance Cost/Accrual
+                borderColor: 'rgb(239, 68, 68)',
                 tension: 0.3,
                 fill: true
             }]
@@ -557,14 +587,150 @@ function renderResidualValueChart(data) {
             responsive: true,
             plugins: {
                 legend: { position: 'top' },
-                title: { display: true, text: 'Aircraft Residual Value Trend Over Time' }
+                title: { display: true, text: 'Variable Depreciation (MR) Accrual Trend Over Time' }
             },
             scales: {
-                y: { beginAtZero: false, title: { display: true, text: 'Residual Value (USD)' } },
+                y: { 
+                    beginAtZero: false, 
+                    title: { display: true, text: 'MR Accrual (USD)' },
+                    ticks: {
+                        callback: function(value) {
+                            // Format y-axis ticks as currency
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                },
                 x: { title: { display: true, text: 'Date of Maintenance/Inspection' } }
             }
         }
     });
+}
+
+
+// =========================================================================
+// Web3 and Wallet Connection
+// =========================================================================
+
+/**
+ * Initializes Web3 and connects to MetaMask.
+ */
+async function initWeb3() {
+    if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        try {
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+            updateStatus();
+            
+            window.ethereum.on('accountsChanged', updateStatus);
+            window.ethereum.on('chainChanged', () => { window.location.reload(); });
+
+        } catch (error) {
+            console.error("MetaMask connection failed:", error);
+            document.getElementById('accountStatus').textContent = "Wallet Status: Connection Failed (Check MetaMask)";
+        }
+    } else {
+        document.getElementById('accountStatus').textContent = "Wallet Status: Please install MetaMask!";
+    }
+}
+
+/**
+ * Updates the wallet connection status and checks if the connected user is Admin.
+ */
+async function updateStatus() {
+    if (!web3 || !contract) return;
+
+    const accounts = await web3.eth.getAccounts();
+    const selectedAccount = accounts[0];
+    const networkId = await web3.eth.net.getId();
+    
+    // Check for BNB Testnet (ID 97)
+    if (networkId.toString() !== '97') {
+            document.getElementById('networkStatus').innerHTML = `Network ID: <span class="text-red-500 font-bold">ERROR: Connect to BNB Testnet (ID 97)</span>`;
+    } else {
+        document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
+    }
+    
+    // Admin Status Check
+    let adminStatus = "Checking Admin status...";
+    let isAdminUser = false;
+    
+    if (selectedAccount) {
+        try {
+            // Check if the connected account is an Admin (uses the new mapping function)
+            isAdminUser = await contract.methods.isAdmin(selectedAccount).call();
+            if (isAdminUser) {
+                adminStatus = '<span class="text-green-600 font-bold">✅ Admin (Permission Granted)</span>';
+            } else {
+                adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
+            }
+        } catch(error) {
+            console.error("Admin check failed:", error);
+            adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
+        }
+    }
+
+
+    if (selectedAccount) {
+        const balanceWei = await web3.eth.getBalance(selectedAccount);
+        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
+        
+        document.getElementById('accountStatus').innerHTML = `Account (Connected): ${selectedAccount} <br>Admin Status: ${adminStatus}`;
+        document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
+        
+        // Only enable IPFS upload button if there is an account
+        document.getElementById('ipfsUploadButton').disabled = !selectedAccount;
+        
+        // If there's a pending CID, enable the record button if they are an admin.
+        if (lastIpfsHash && isAdminUser) {
+             document.getElementById('recordOnlyButton').disabled = false;
+             document.getElementById('recordOnlyButton').textContent = "2. Record CID on Blockchain (Ready)";
+        }
+
+    } else {
+        document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
+        document.getElementById('ipfsUploadButton').disabled = true;
+        document.getElementById('recordOnlyButton').disabled = true;
+    }
+}
+
+
+/**
+ * Uploads the file to IPFS via Pinata service.
+ * @param {File} file - The file to upload.
+ * @param {string} apiKey - Pinata API Key.
+ * @param {string} apiSecret - Pinata Secret Key.
+ * @returns {Promise<string>} The IPFS Content Identifier (CID).
+ */
+async function uploadToIPFS(file, apiKey, apiSecret) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const pinataMetadata = JSON.stringify({ name: file.name });
+    formData.append('pinataMetadata', pinataMetadata);
+
+    try {
+        const response = await fetch(PINATA_URL, {
+            method: 'POST',
+            headers: {
+                'pinata_api_key': apiKey,
+                'pinata_secret_api_key': apiSecret
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Pinata API Error: ' + response.status + ' - ' + errorText.substring(0, 100) + '...');
+        }
+        
+        const json = await response.json();
+        return json.IpfsHash; // Return the CID
+        
+    } catch (error) {
+        console.error("IPFS Upload Error:", error);
+        throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
+    }
 }
 
 
