@@ -4,11 +4,16 @@
 let web3;
 let contract;
 let chartInstance = null; // To store the Chart.js instance
+let lastIpfsHash = ""; // NEW: Stores the CID after successful IPFS upload
 
 // Deployed Contract Address (BNB Testnet)
-const CONTRACT_ADDRESS = "0x790bAf11120bbc2005853793a737482C4e33cDBe"; 
+// !!! 이 주소를 새롭게 배포된 컨트랙트 주소로 업데이트해야 합니다 !!!
+// (재배포 후, Truffle 출력의 'contract address'를 여기에 붙여넣으세요)
+const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
 
 // ABI for the Contract (includes only necessary functions)
+// !!! 솔리디티 컨트랙트의 인터페이스(함수, 이벤트)가 변경되었다면, 
+// !!! Truffle이 생성한 JSON 파일에서 이 CONTRACT_ABI 배열을 통째로 복사해서 붙여넣으세요.
 const CONTRACT_ABI = [
     {
       "inputs": [
@@ -48,12 +53,12 @@ const CONTRACT_ABI = [
           "type": "uint256"
         }
       ],
-      "name": "admins",
+      "name": "fileHashes",
       "outputs": [
         {
-          "internalType": "address",
+          "internalType": "string",
           "name": "",
-          "type": "address"
+          "type": "string"
         }
       ],
       "stateMutability": "view",
@@ -63,17 +68,17 @@ const CONTRACT_ABI = [
     {
       "inputs": [
         {
-          "internalType": "uint256",
+          "internalType": "address",
           "name": "",
-          "type": "uint256"
+          "type": "address"
         }
       ],
-      "name": "fileHashes",
+      "name": "isAdmin",
       "outputs": [
         {
-          "internalType": "string",
+          "internalType": "bool",
           "name": "",
-          "type": "string"
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
@@ -145,6 +150,172 @@ function setActiveTab(tabName) {
     activeTabButton.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
 }
 
+/**
+ * Handles the IPFS Upload step.
+ */
+async function handleIpfsUpload() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiSecret = document.getElementById('apiSecret').value.trim();
+    const fileInput = document.getElementById('fileInput'); 
+    const file = fileInput.files[0];
+    const button = document.getElementById('ipfsUploadButton');
+    const recordButton = document.getElementById('recordOnlyButton');
+
+    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
+    if (!apiKey || !apiSecret) return alert("Please enter your Pinata API Key and Secret Key.");
+    if (!file) return alert("Please select a CSV file containing maintenance data to upload.");
+
+    button.disabled = true;
+    recordButton.disabled = true;
+    button.textContent = "1. Uploading to IPFS...";
+    document.getElementById('uploadStatus').textContent = "Status: 1. Starting IPFS upload process...";
+    
+    try {
+        // 1. IPFS Upload
+        const ipfsFileHash = await uploadToIPFS(file, apiKey, apiSecret);
+        
+        // Success
+        lastIpfsHash = ipfsFileHash; // Store the hash
+        document.getElementById('uploadStatus').innerHTML = `✅ **IPFS Upload Success!** CID: ${ipfsFileHash.substring(0, 10)}...`;
+        document.getElementById('ipfsHashDisplay').classList.remove('hidden');
+        document.getElementById('ipfsHashDisplay').innerHTML = `Last Uploaded CID: ${ipfsFileHash}`;
+
+        // Enable the next step only if the user is an Admin
+        const accounts = await web3.eth.getAccounts();
+        const isAdminUser = await contract.methods.isAdmin(accounts[0]).call();
+
+        if (isAdminUser) {
+            recordButton.disabled = false;
+            recordButton.textContent = "2. Record CID on Blockchain (Ready)";
+        } else {
+            document.getElementById('uploadStatus').innerHTML += `<br><span class="text-red-500">❌ Error: Only Admin can proceed to Blockchain Recording.</span>`;
+        }
+
+    } catch (error) {
+        lastIpfsHash = ""; // Clear hash on failure
+        document.getElementById('ipfsHashDisplay').classList.add('hidden');
+        document.getElementById('uploadStatus').textContent = `❌ IPFS Upload Failed: ${error.message}`;
+        console.error("IPFS Upload Error:", error);
+    } finally {
+        button.disabled = false;
+        button.textContent = "1. Upload File to IPFS";
+    }
+}
+
+/**
+ * Records the stored IPFS hash (CID) onto the smart contract.
+ * Uses lastIpfsHash global variable.
+ */
+async function handleRecordOnly() {
+    const recordButton = document.getElementById('recordOnlyButton');
+    
+    if (!lastIpfsHash) return alert("Please upload a file to IPFS first (Step 1).");
+    
+    recordButton.disabled = true;
+    recordButton.textContent = "2. Recording to Blockchain...";
+    document.getElementById('uploadStatus').textContent = `Status: 2. Recording Maintenance Data CID to Blockchain...`;
+
+    const accounts = await web3.eth.getAccounts();
+    const senderAccount = accounts[0]; 
+
+    try {
+        const tx = await contract.methods.addFileHash(lastIpfsHash)
+            .send({
+                from: senderAccount
+            });
+        
+        // Extract fileId (Record ID) from the event log
+        const fileId = tx.events.FileHashRecorded.returnValues.fileId;
+
+        document.getElementById('uploadStatus').innerHTML = `✅ **SUCCESS!** Maintenance Record CID recorded. (File ID: <span class="font-bold text-green-600">${fileId}</span>) <br>Tx Hash: ${tx.transactionHash.substring(0, 10)}...`;
+        
+        // Clear state after success
+        lastIpfsHash = "";
+        document.getElementById('ipfsHashDisplay').classList.add('hidden');
+
+    } catch (error) {
+        let errorMessage = "Blockchain recording failed.";
+        
+        if (error.message && error.message.includes("insufficient funds")) {
+            errorMessage = "Blockchain Recording Failed: Insufficient tBNB balance for gas.";
+        } else if (error.message && (error.message.includes("revert") || error.message.includes("denied") || error.message.includes("Only admin"))) {
+            // This captures the Checksum/Admin issue
+            errorMessage = "Blockchain Recording Failed: Transaction reverted. **Possible Admin/Permission issue (Checksum Mismatch)** or contract logic error.";
+        } else if (error.message && error.message.includes("User denied transaction signature")) {
+            errorMessage = "Blockchain Recording Failed: Transaction was manually rejected by the user.";
+        } else {
+            errorMessage = `Blockchain Recording Failed: ${error.message.substring(0, 100)}...`;
+        }
+
+        document.getElementById('uploadStatus').textContent = `❌ ${errorMessage}`;
+        console.error("Blockchain transaction error:", error);
+    } finally {
+        recordButton.disabled = false;
+        recordButton.textContent = "2. Record CID on Blockchain";
+        updateStatus(); // Re-check status to potentially disable/enable buttons based on new state
+    }
+}
+
+/**
+ * Main function to retrieve the record, fetch data from IPFS, and visualize it.
+ */
+async function viewRecordAndAnalyze() {
+    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
+
+    const fileId = document.getElementById('recordIdInput').value;
+    const viewButton = document.getElementById('viewButton');
+    const statusDiv = document.getElementById('viewStatus');
+    
+    if (!fileId || isNaN(fileId) || fileId <= 0) {
+        statusDiv.textContent = "Please enter a valid Maintenance Record ID (e.g., 1).";
+        return;
+    }
+
+    viewButton.disabled = true;
+    viewButton.textContent = "Searching...";
+    statusDiv.textContent = `1. Querying Blockchain for Maintenance Record ID ${fileId}...`;
+    
+    try {
+        // 1. Retrieve CID from Blockchain
+        const ipfsHash = await contract.methods.getFileHash(fileId).call();
+        
+        if (ipfsHash.length === 0 || ipfsHash === '0x') {
+            throw new Error(`Maintenance Record ID ${fileId} not found on the blockchain. The record may not exist or the ID is invalid.`);
+        }
+
+        statusDiv.textContent = `2. CID Found: ${ipfsHash.substring(0, 10)}... Fetching data from IPFS Gateway...`;
+
+        // 2. Fetch CSV data from IPFS Gateway
+        const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+        // Using a proxy is often necessary to avoid CORS issues when fetching external IPFS content
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
+        
+        const response = await fetch(proxyUrl);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
+        }
+
+        const csvText = await response.text();
+        
+        // 3. Parse CSV and extract data for table/chart
+        const dataForChart = csvToHtmlTable(csvText);
+        
+        // 4. Render Chart
+        renderResidualValueChart(dataForChart);
+
+        statusDiv.innerHTML = `✅ **SUCCESS!** Data retrieved and analyzed. CID: <a href="${gatewayUrl}" target="_blank" class="text-blue-600 underline">${ipfsHash}</a>`;
+
+    } catch (error) {
+        document.getElementById('dataTable').innerHTML = `<p class="p-4 text-red-500">Error: Failed to retrieve or process data.</p>`;
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        console.error("View/Analyze Error:", error);
+    } finally {
+        viewButton.disabled = false;
+        viewButton.textContent = "Retrieve Record and Start Analysis";
+    }
+}
+
 
 // =========================================================================
 // Web3 and Wallet Connection
@@ -157,12 +328,10 @@ async function initWeb3() {
     if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
-            // Request account access
             await window.ethereum.request({ method: 'eth_requestAccounts' });
             contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
             updateStatus();
             
-            // Listen for account or network changes
             window.ethereum.on('accountsChanged', updateStatus);
             window.ethereum.on('chainChanged', () => { window.location.reload(); });
 
@@ -176,10 +345,10 @@ async function initWeb3() {
 }
 
 /**
- * Updates the wallet connection status (account, balance, network).
+ * Updates the wallet connection status and checks if the connected user is Admin.
  */
 async function updateStatus() {
-    if (!web3) return;
+    if (!web3 || !contract) return;
 
     const accounts = await web3.eth.getAccounts();
     const selectedAccount = accounts[0];
@@ -191,23 +360,50 @@ async function updateStatus() {
     } else {
         document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
     }
+    
+    // Admin Status Check
+    let adminStatus = "Checking Admin status...";
+    let isAdminUser = false;
+    
+    if (selectedAccount) {
+        try {
+            // Check if the connected account is an Admin (uses the new mapping function)
+            isAdminUser = await contract.methods.isAdmin(selectedAccount).call();
+            if (isAdminUser) {
+                adminStatus = '<span class="text-green-600 font-bold">✅ Admin (Permission Granted)</span>';
+            } else {
+                adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
+            }
+        } catch(error) {
+            console.error("Admin check failed:", error);
+            adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
+        }
+    }
+
 
     if (selectedAccount) {
         const balanceWei = await web3.eth.getBalance(selectedAccount);
         const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-        document.getElementById('accountStatus').textContent = `Account: ${selectedAccount.substring(0, 6)}...${selectedAccount.substring(38)}`;
+        
+        document.getElementById('accountStatus').innerHTML = `Account (Connected): ${selectedAccount} <br>Admin Status: ${adminStatus}`;
         document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
-        document.getElementById('recordButton').disabled = false;
+        
+        // Only enable IPFS upload button if there is an account
+        document.getElementById('ipfsUploadButton').disabled = !selectedAccount;
+        
+        // If there's a pending CID, enable the record button if they are an admin.
+        if (lastIpfsHash && isAdminUser) {
+             document.getElementById('recordOnlyButton').disabled = false;
+             document.getElementById('recordOnlyButton').textContent = "2. Record CID on Blockchain (Ready)";
+        }
+
     } else {
         document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
-        document.getElementById('recordButton').disabled = true;
+        document.getElementById('ipfsUploadButton').disabled = true;
+        document.getElementById('recordOnlyButton').disabled = true;
     }
 }
 
-
-// =========================================================================
-// 1. IPFS Upload (Pinata Simulation)
-// =========================================================================
 
 /**
  * Uploads the file to IPFS via Pinata service.
@@ -227,7 +423,6 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         const response = await fetch(PINATA_URL, {
             method: 'POST',
             headers: {
-                // Pinata requires custom headers for file upload
                 'pinata_api_key': apiKey,
                 'pinata_secret_api_key': apiSecret
             },
@@ -247,102 +442,6 @@ async function uploadToIPFS(file, apiKey, apiSecret) {
         throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
     }
 }
-
-// =========================================================================
-// 2. Blockchain Recording
-// =========================================================================
-
-/**
- * Records the IPFS hash (CID) onto the smart contract.
- * @param {string} ipfsFileHash - The CID of the uploaded file.
- * @returns {Promise<string>} The File ID (Record ID) generated by the contract.
- */
-async function recordMaintenanceHistory(ipfsFileHash) {
-    const accounts = await web3.eth.getAccounts();
-    const adminAccount = accounts[0];
-    
-    document.getElementById('uploadStatus').textContent = `3. Recording Maintenance Data CID to Blockchain... (Admin: ${adminAccount.substring(0, 6)}...)`;
-
-    try {
-        const tx = await contract.methods.addFileHash(ipfsFileHash)
-            .send({
-                from: adminAccount
-            });
-        
-        // Extract fileId (Record ID) from the event log
-        const fileId = tx.events.FileHashRecorded.returnValues.fileId;
-
-        document.getElementById('uploadStatus').innerHTML = `✅ **SUCCESS!** Maintenance Record CID recorded. (File ID: <span class="font-bold text-green-600">${fileId}</span>) <br>Tx Hash: ${tx.transactionHash.substring(0, 10)}...`;
-        
-        return fileId;
-
-    } catch (error) {
-        // IMPROVED ERROR HANDLING
-        let errorMessage = "Blockchain recording failed.";
-        
-        // Check for specific error types (Insufficient funds, revert, etc.)
-        if (error.message && error.message.includes("insufficient funds")) {
-            errorMessage = "Blockchain Recording Failed: Insufficient tBNB balance for gas.";
-        } else if (error.message && (error.message.includes("revert") || error.message.includes("denied"))) {
-            errorMessage = "Blockchain Recording Failed: Transaction reverted. **Possible Admin/Permission issue** or contract logic error.";
-        } else if (error.message && error.message.includes("User denied transaction signature")) {
-            errorMessage = "Blockchain Recording Failed: Transaction was manually rejected by the user.";
-        } else {
-            errorMessage = `Blockchain Recording Failed: ${error.message.substring(0, 100)}...`;
-        }
-
-        document.getElementById('uploadStatus').textContent = `❌ ${errorMessage}`;
-        console.error("Blockchain transaction error:", error);
-        throw new Error("Blockchain recording failed.");
-    }
-}
-
-// =========================================================================
-// Upload Handler
-// =========================================================================
-
-/**
- * Main function to handle the entire upload and record process.
- */
-async function handleUploadAndRecord() {
-    const apiKey = document.getElementById('apiKey').value.trim();
-    const apiSecret = document.getElementById('apiSecret').value.trim();
-    const fileInput = document.getElementById('fileInput'); 
-    const file = fileInput.files[0];
-    const button = document.getElementById('recordButton');
-
-    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
-    if (!apiKey || !apiSecret) return alert("Please enter your Pinata API Key and Secret Key.");
-    if (!file) return alert("Please select a CSV file containing maintenance data to upload.");
-
-    button.disabled = true;
-    button.textContent = "Processing...";
-    document.getElementById('uploadStatus').textContent = "1. Starting upload process...";
-
-    try {
-        // 1. IPFS Upload
-        document.getElementById('uploadStatus').textContent = "2. Uploading file to IPFS via Pinata...";
-        const ipfsFileHash = await uploadToIPFS(file, apiKey, apiSecret);
-        
-        document.getElementById('uploadStatus').textContent = `2. IPFS Upload Success! CID: ${ipfsFileHash.substring(0, 10)}...`;
-
-        // 2. Blockchain Record
-        await recordMaintenanceHistory(ipfsFileHash);
-
-    } catch (error) {
-        console.error("Total process error:", error);
-        // Display the detailed error from the failed step (IPFS or Blockchain)
-        document.getElementById('uploadStatus').textContent = `❌ Total Process Failed: ${error.message}`;
-    } finally {
-        button.disabled = false;
-        button.textContent = "Upload to IPFS and Record CID on Blockchain";
-    }
-}
-
-
-// =========================================================================
-// 3 & 4. Data Retrieval and Analysis
-// =========================================================================
 
 /**
  * Parses CSV text into an HTML table and extracts data for charting.
@@ -440,65 +539,6 @@ function renderResidualValueChart(data) {
     });
 }
 
-/**
- * Main function to retrieve the record, fetch data from IPFS, and visualize it.
- */
-async function viewRecordAndAnalyze() {
-    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
-
-    const fileId = document.getElementById('recordIdInput').value;
-    const viewButton = document.getElementById('viewButton');
-    const statusDiv = document.getElementById('viewStatus');
-    
-    if (!fileId || isNaN(fileId) || fileId <= 0) {
-        statusDiv.textContent = "Please enter a valid Maintenance Record ID (e.g., 1).";
-        return;
-    }
-
-    viewButton.disabled = true;
-    viewButton.textContent = "Searching...";
-    statusDiv.textContent = `1. Querying Blockchain for Maintenance Record ID ${fileId}...`;
-    
-    try {
-        // 1. Retrieve CID from Blockchain
-        const ipfsHash = await contract.methods.getFileHash(fileId).call();
-        
-        if (ipfsHash.length === 0 || ipfsHash === '0x') {
-            throw new Error(`Maintenance Record ID ${fileId} not found on the blockchain. The record may not exist or the ID is invalid.`);
-        }
-
-        statusDiv.textContent = `2. CID Found: ${ipfsHash.substring(0, 10)}... Fetching data from IPFS Gateway...`;
-
-        // 2. Fetch CSV data from IPFS Gateway
-        const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-        // Using a proxy is often necessary to avoid CORS issues when fetching external IPFS content
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gatewayUrl)}`;
-        
-        const response = await fetch(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
-        }
-
-        const csvText = await response.text();
-        
-        // 3. Parse CSV and extract data for table/chart
-        const dataForChart = csvToHtmlTable(csvText);
-        
-        // 4. Render Chart
-        renderResidualValueChart(dataForChart);
-
-        statusDiv.innerHTML = `✅ **SUCCESS!** Data retrieved and analyzed. CID: <a href="${gatewayUrl}" target="_blank" class="text-blue-600 underline">${ipfsHash}</a>`;
-
-    } catch (error) {
-        document.getElementById('dataTable').innerHTML = `<p class="p-4 text-red-500">Error: Failed to retrieve or process data.</p>`;
-        statusDiv.textContent = `❌ Error: ${error.message}`;
-        console.error("View/Analyze Error:", error);
-    } finally {
-        viewButton.disabled = false;
-        viewButton.textContent = "Retrieve Record and Start Analysis";
-    }
-}
 
 // =========================================================================
 // Initialization
@@ -506,9 +546,7 @@ async function viewRecordAndAnalyze() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initWeb3();
-    document.getElementById('recordButton').disabled = true; // Disable until MetaMask is connected
-    setActiveTab('upload'); // Set default tab (now calls the globally defined function)
+    document.getElementById('ipfsUploadButton').disabled = true; // Disable until MetaMask is connected
+    document.getElementById('recordOnlyButton').disabled = true;
+    setActiveTab('upload'); 
 });
-
-// Note: Functions defined globally (without 'const' or 'let' and outside a module) 
-// are automatically attached to the 'window' object and are visible to HTML onclick handlers.

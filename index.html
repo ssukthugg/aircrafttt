@@ -3,123 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aircraft Maintenance History DApp</title>
+    <title>Aircraft Maintenance History Ledger</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Web3.js 라이브러리 (MetaMask 통신용) -->
-    <script src="https://cdn.jsdelivr.net/npm/web3@4.1.2/dist/web3.min.js"></script>
-    <!-- Chart.js 라이브러리 (데이터 시각화용) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
+    <!-- Web3.js for blockchain interaction -->
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.8.1/dist/web3.min.js"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <!-- CRITICAL FIX: Load the application logic file -->
+    <script src="app.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        /* CSV 테이블 스타일 */
-        #dataTable table { width: 100%; border-collapse: collapse; }
-        #dataTable th, #dataTable td { padding: 10px 12px; border: 1px solid #e5e7eb; text-align: left; font-size: 0.875rem; }
-        #dataTable th { background-color: #f3f4f6; font-weight: 600; }
-        #dataTable tbody tr:nth-child(even) { background-color: #f9fafb; }
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
+        .card { background-color: white; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .container-main { max-width: 900px; }
+        .tab-content table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .tab-content th, .tab-content td { border: 1px solid #e5e7eb; padding: 0.75rem; text-align: left; }
+        .tab-content th { background-color: #f3f4f6; font-weight: 600; }
+        /* Custom Button Styling */
+        .btn-primary { 
+            background-color: #4f46e5; 
+            color: white; 
+            font-weight: 600; 
+            padding: 0.75rem 1.5rem; 
+            border-radius: 0.5rem; 
+            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary:hover:not(:disabled) { background-color: #4338ca; }
+        .btn-primary:disabled { background-color: #a5b4fc; cursor: not-allowed; }
+
+        .btn-secondary { 
+            background-color: #10b981; 
+            color: white; 
+            font-weight: 600; 
+            padding: 0.75rem 1.5rem; 
+            border-radius: 0.5rem; 
+            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .btn-secondary:hover:not(:disabled) { background-color: #059669; }
+        .btn-secondary:disabled { background-color: #a7f3d0; cursor: not-allowed; }
+
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 sm:p-8">
+<body class="p-4 md:p-8 min-h-screen">
 
-    <div class="max-w-6xl mx-auto bg-white p-6 sm:p-10 rounded-2xl shadow-2xl">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2 flex items-center">
-            <svg class="w-8 h-8 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-            Aircraft Maintenance DApp (IPFS & BNB Chain)
+    <div class="container-main mx-auto">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">
+            Aircraft Maintenance History Ledger (BNB Testnet)
         </h1>
-        <p class="text-gray-600 mb-8 border-b pb-4">
-            CSV 파일을 IPFS에 업로드하고 CID를 BNB Testnet에 기록합니다. 기록된 데이터는 그래프와 테이블로 시각화됩니다.
-        </p>
-        
-        <!-- Status & Wallet Connection -->
-        <div class="bg-blue-50 p-4 rounded-xl mb-6 shadow-inner flex flex-wrap justify-between items-center text-sm">
-            <div id="accountStatus" class="font-medium text-blue-800">Wallet Status: Connecting...</div>
-            <div id="networkStatus" class="font-medium text-blue-800 mt-2 sm:mt-0">Network ID: N/A</div>
-            <div id="balanceStatus" class="font-medium text-blue-800 mt-2 sm:mt-0">Balance: N/A</div>
+
+        <!-- Wallet Status Area -->
+        <div class="card p-4 mb-8 bg-indigo-50 border border-indigo-200">
+            <h2 class="text-lg font-bold text-indigo-700 mb-2">Wallet & Network Status</h2>
+            <p id="accountStatus" class="text-sm text-gray-700 break-words">Account (Connected): Awaiting Connection...</p>
+            <p id="networkStatus" class="text-sm text-gray-700">Network ID: Awaiting Connection...</p>
+            <p id="balanceStatus" class="text-sm text-gray-700">Balance: 0 tBNB</p>
+            <p class="text-xs text-red-500 mt-2">🚨 Ensure your connected address is the Admin address (from your Truffle Mnemonic).</p>
         </div>
 
         <!-- Tab Navigation -->
-        <div class="mb-6 border-b border-gray-200">
+        <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                <button id="tabUpload" onclick="setActiveTab('upload')" class="tab-button border-b-2 py-2 px-1 text-base font-medium transition-colors duration-200 text-blue-600 border-blue-600">
-                    1. Upload & Record (IPFS & Blockchain)
+                <button id="tabUpload" onclick="setActiveTab('upload')" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    1. Upload & Record
                 </button>
-                <button id="tabView" onclick="setActiveTab('view')" class="tab-button border-b-2 py-2 px-1 text-base font-medium transition-colors duration-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                    2. View & Analyze (Data Lookup & Graph)
+                <button id="tabView" onclick="setActiveTab('view')" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    2. View & Analyze Record
                 </button>
             </nav>
         </div>
 
-        <!-- 1. Upload & Record Tab Content -->
-        <div id="contentUpload" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">새로운 정비 기록 등록</h2>
+        <!-- Tab Content: UPLOAD & RECORD -->
+        <div id="contentUpload" class="tab-content card p-6 mt-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Record New Maintenance Data</h2>
 
-            <!-- Pinata API Keys (for demo) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="space-y-4 mb-6">
+                <!-- Pinata Keys -->
                 <div>
-                    <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Pinata API Key</label>
-                    <input type="text" id="apiKey" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="YOUR_PINATA_API_KEY"/>
+                    <label for="apiKey" class="block text-sm font-medium text-gray-700">Pinata API Key</label>
+                    <input type="password" id="apiKey" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Your Pinata API Key">
                 </div>
                 <div>
-                    <label for="apiSecret" class="block text-sm font-medium text-gray-700 mb-1">Pinata Secret Key</label>
-                    <input type="password" id="apiSecret" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="YOUR_PINATA_SECRET_KEY"/>
+                    <label for="apiSecret" class="block text-sm font-medium text-gray-700">Pinata Secret Key</label>
+                    <input type="password" id="apiSecret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Your Pinata Secret Key">
+                </div>
+
+                <!-- File Input -->
+                <div>
+                    <label for="fileInput" class="block text-sm font-medium text-gray-700">Select Maintenance CSV File</label>
+                    <input type="file" id="fileInput" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                 </div>
             </div>
 
-            <!-- File Input -->
-            <div class="mb-6">
-                <label for="fileInput" class="block text-lg font-medium text-gray-700 mb-2">CSV 파일 선택 및 업로드</label>
-                <input type="file" id="fileInput" accept=".csv" class="w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-green-50 file:text-green-700
-                    hover:file:bg-green-100
-                "/>
-            </div>
-
-            <button id="recordButton" onclick="handleUploadAndRecord()" class="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition duration-150 shadow-lg disabled:opacity-50">
-                IPFS 업로드 및 블록체인에 CID 기록하기
-            </button>
-            
-            <div id="uploadStatus" class="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700 min-h-[3rem]">Ready to upload.</div>
-        </div>
-
-        <!-- 2. View & Analyze Tab Content -->
-        <div id="contentView" class="tab-content hidden">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">정비 기록 조회 및 분석</h2>
-
-            <div class="flex flex-col md:flex-row gap-4 mb-6">
-                <div class="flex-grow">
-                    <label for="recordIdInput" class="block text-sm font-medium text-gray-700 mb-1">Maintenance Record ID (File ID)</label>
-                    <input type="number" id="recordIdInput" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="1, 2, 3 등 기록 ID를 입력하세요"/>
-                </div>
-                <button id="viewButton" onclick="viewRecordAndAnalyze()" class="w-full md:w-auto mt-2 md:mt-5 px-6 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition duration-150 shadow-lg disabled:opacity-50 flex-shrink-0">
-                    기록 조회 및 분석 시작
+            <div class="flex flex-col md:flex-row gap-4">
+                <!-- Step 1 Button: IPFS Upload -->
+                <button id="ipfsUploadButton" onclick="handleIpfsUpload()" class="btn-primary flex-1">
+                    1. Upload File to IPFS
+                </button>
+                
+                <!-- Step 2 Button: Blockchain Record -->
+                <button id="recordOnlyButton" onclick="handleRecordOnly()" class="btn-secondary flex-1" disabled>
+                    2. Record CID on Blockchain
                 </button>
             </div>
-            
-            <div id="viewStatus" class="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700 min-h-[3rem]">Input Record ID to view data.</div>
 
-            <!-- Visualization Area (Graph) -->
-            <div class="mt-8">
-                <h3 class="text-lg font-bold text-gray-800 mb-3 border-b pb-1">잔존가치 (Residual Value) 추이 그래프</h3>
-                <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-200">
-                    <canvas id="residualValueChart"></canvas>
-                </div>
+
+            <!-- Status Display -->
+            <div id="uploadStatus" class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 min-h-[4rem]">
+                Status: Ready to upload.
             </div>
-
-            <!-- Data Table Area -->
-            <div class="mt-8">
-                <h3 class="text-lg font-bold text-gray-800 mb-3 border-b pb-1">원본 CSV 데이터 테이블</h3>
-                <div id="dataTable" class="overflow-x-auto border rounded-lg">
-                    <p class="p-4 text-gray-500">조회된 데이터가 여기에 표 형식으로 표시됩니다.</p>
-                </div>
+            
+            <!-- IPFS Hash Display -->
+            <div id="ipfsHashDisplay" class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs font-mono break-all hidden">
+                Last Uploaded CID: 
             </div>
         </div>
-    </div>
 
-    <!-- 🚨 IMPORTANT: Load the external app.js file 🚨 -->
-    <script src="./app.js"></script>
+        <!-- Tab Content: VIEW & ANALYZE -->
+        <div id="contentView" class="tab-content card p-6 mt-6 hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Retrieve and Analyze Record</h2>
+            
+            <div class="flex space-x-4 mb-6">
+                <input type="number" id="recordIdInput" class="flex-1 border border-gray-300 rounded-md shadow-sm p-2" placeholder="Enter Maintenance Record ID (e.g., 1)">
+                <button id="viewButton" onclick="viewRecordAndAnalyze()" class="btn-primary w-1/3">
+                    Retrieve Record and Start Analysis
+                </button>
+            </div>
+
+            <!-- Status Display -->
+            <div id="viewStatus" class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 min-h-[4rem]">
+                Status: Enter a Record ID and click 'Retrieve'.
+            </div>
+
+            <!-- Data Table -->
+            <div class="mt-8 overflow-x-auto">
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">Raw Maintenance Data (from IPFS)</h3>
+                <div id="dataTable" class="card overflow-hidden">
+                    <p class="p-4 text-gray-500">Data will appear here after retrieval.</p>
+                </div>
+            </div>
+            
+            <!-- Chart Area -->
+            <div class="mt-8 card p-4">
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">Residual Value Trend Analysis</h3>
+                <canvas id="residualValueChart"></canvas>
+            </div>
+        </div>
+        
+    </div>
 </body>
 </html>
