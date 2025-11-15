@@ -22,6 +22,16 @@
         .overflow-x-auto::-webkit-scrollbar-track {
             background-color: rgba(229, 231, 235, 0.5);
         }
+        /* Highlight the contract address area for easy updates */
+        .contract-address-note {
+            background-color: #fef3c7; /* yellow-100 */
+            border-left: 4px solid #f59e0b; /* yellow-500 */
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: #78350f; /* yellow-900 */
+            border-radius: 0.5rem;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
@@ -154,7 +164,7 @@
         let lastIpfsHash = ""; // Stores the CID after successful IPFS upload
         
         // Deployed Contract Address (BNB Testnet)
-        // !!! Please update this address with the newly deployed contract address !!!
+        // 🚨 중요: 배포된 새 컨트랙트 주소로 아래 값을 반드시 업데이트해야 합니다! 🚨
         const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
         
         // ABI for the Contract (includes only necessary functions)
@@ -274,6 +284,49 @@
         const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
         
         
+        // =========================================================================
+        // CSV Parsing Utility (New and Improved)
+        // =========================================================================
+        
+        /**
+         * Advanced CSV line parser to handle quoted fields containing commas.
+         * This function is crucial for preventing column misalignment.
+         * @param {string} line - The raw CSV line.
+         * @returns {string[]} An array of cleaned cell values.
+         */
+        function parseCSVLine(line) {
+            const cells = [];
+            let currentCell = '';
+            let inQuotes = false;
+        
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+        
+                if (char === '"') {
+                    // Handle escaped quotes inside a quoted field ("")
+                    if (inQuotes && line[i + 1] === '"') {
+                        currentCell += char;
+                        i++; // Skip the next quote
+                    } else {
+                        // Toggle inQuotes state
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    // Found a delimiter outside of quotes
+                    cells.push(currentCell.trim());
+                    currentCell = '';
+                } else {
+                    // Append character to current cell
+                    currentCell += char;
+                }
+            }
+            // Push the last cell
+            cells.push(currentCell.trim());
+        
+            // Final cleaning: remove surrounding quotes from all cells if they exist.
+            return cells.map(cell => cell.replace(/^"|"$/g, ''));
+        }
+
         // =========================================================================
         // UI Functions (Defined as global functions for HTML onclick stability)
         // =========================================================================
@@ -551,7 +604,7 @@
                         adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
                     }
                 } catch(error) {
-                    console.error("Admin check failed:", error);
+                    console.error("Admin check failed (likely Invalid Contract Address):", error);
                     adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
                 }
             }
@@ -621,7 +674,6 @@
         
         /**
          * Parses CSV text into an HTML table and extracts data for charting.
-         * The logic is highly defensive against common CSV parsing errors (like missing cells or extra commas).
          * @param {string} csvText - The raw CSV content.
          * @returns {Array<{date: string, value: number}>} Data points for the chart.
          */
@@ -645,8 +697,8 @@
             
             tableWrapper.appendChild(table); // Append table to the new wrapper
         
-            // 2. Parse Headers (First Line) and find required indices
-            const headers = lines[0].split(',');
+            // 2. Parse Headers (First Line) and find required indices using the new parser
+            const headers = parseCSVLine(lines[0]);
             const THEAD_ROW = thead.insertRow();
             THEAD_ROW.className = "bg-gray-50";
         
@@ -655,7 +707,7 @@
             const headersCleaned = [];
         
             headers.forEach((header, index) => {
-                const headerValue = (header || '').trim().replace(/"/g, '');
+                const headerValue = (header || '').trim();
                 headersCleaned.push(headerValue);
                 
                 // Find required column indices (case-insensitive and partial match)
@@ -678,7 +730,7 @@
                 console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'MR' (Index: ${mrIndex}) columns in CSV header.`);
             }
         
-            // 3. Parse Body and Extract Chart Data
+            // 3. Parse Body and Extract Chart Data using the new parser
             const dataForChart = [];
             const expectedColumnCount = headersCleaned.length;
         
@@ -686,8 +738,8 @@
                 const line = lines[i].trim();
                 if (line === '') continue;
                 
-                // Use simple split (potential issue source, but we mitigate with safety checks below)
-                const cells = line.split(',');
+                // Use the robust parser
+                const cells = parseCSVLine(line);
                 const row = tbody.insertRow();
                 row.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
         
@@ -697,23 +749,21 @@
                 // Iterate up to the expected number of columns to prevent undefined access
                 for (let j = 0; j < expectedColumnCount; j++) {
                     // Get cell content, use empty string if undefined (out of bounds due to missing trailing fields)
-                    const cell = cells[j] !== undefined ? cells[j] : '';
-                    
-                    // Ensure content is a string before calling trim()
-                    const value = String(cell).trim().replace(/"/g, '');
+                    const cellValue = cells[j] !== undefined ? cells[j] : '';
                     
                     // Populate HTML Table
                     const td = row.insertCell();
-                    td.textContent = value;
+                    td.textContent = cellValue;
                     td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500 min-w-[120px]"; // Added min-width to cells
                     
                     // Extract chart data using fixed indices
                     if (j === dateIndex) { 
-                        dateValue = value;
+                        dateValue = cellValue;
                     }
                     if (j === mrIndex) { 
                         // Enhanced cleaning for numerical values, removing currency symbols and non-digit/non-dot characters
-                        mrValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+                        // Use parseFloat on the cleaned cell value
+                        mrValue = parseFloat(cellValue.replace(/[^0-9.]/g, ''));
                     }
                 }
                 
