@@ -155,56 +155,119 @@
         
         // Deployed Contract Address (BNB Testnet)
         // !!! Please update this address with the newly deployed contract address !!!
-        const CONTRACT_ADDRESS = "0x790bAf11120bbc2005853793a737482C4e33cDBe"; 
+        const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
         
         // ABI for the Contract (includes only necessary functions)
         // !!! Update this if your Solidity contract interface changes.
         const CONTRACT_ABI = [
             {
-                "inputs": [
-                    { "internalType": "address[]", "name": "_admins", "type": "address[]" }
-                ],
-                "stateMutability": "nonpayable",
-                "type": "constructor"
+            "inputs": [
+                {
+                "internalType": "address[]",
+                "name": "_admins",
+                "type": "address[]"
+                }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
             },
             {
-                "anonymous": false,
-                "inputs": [
-                    { "indexed": false, "internalType": "uint256", "name": "fileId", "type": "uint256" },
-                    { "indexed": false, "internalType": "string", "name": "ipfsHash", "type": "string" }
-                ],
-                "name": "FileHashRecorded",
-                "type": "event"
-            },
-            // isAdmin mapping lookup function
-            {
-                "inputs": [{"internalType": "address", "name": "", "type": "address"}],
-                "name": "isAdmin",
-                "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-                "stateMutability": "view",
-                "type": "function"
-            },
-            {
-                "inputs": [
-                    { "internalType": "string", "name": "_ipfsHash", "type": "string" }
-                ],
-                "name": "addFileHash",
-                "outputs": [
-                    { "internalType": "uint256", "name": "", "type": "uint256" }
-                ],
-                "stateMutability": "nonpayable",
-                "type": "function"
+            "anonymous": false,
+            "inputs": [
+                {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "fileId",
+                "type": "uint256"
+                },
+                {
+                "indexed": false,
+                "internalType": "string",
+                "name": "ipfsHash",
+                "type": "string"
+                }
+            ],
+            "name": "FileHashRecorded",
+            "type": "event"
             },
             {
-                "inputs": [
-                    { "internalType": "uint256", "name": "_fileId", "type": "uint256" }
-                ],
-                "name": "getFileHash",
-                "outputs": [
-                    { "internalType": "string", "name": "", "type": "string" }
-                ],
-                "stateMutability": "view",
-                "type": "function"
+            "inputs": [
+                {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+                }
+            ],
+            "name": "fileHashes",
+            "outputs": [
+                {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+            },
+            {
+            "inputs": [
+                {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+                }
+            ],
+            "name": "isAdmin",
+            "outputs": [
+                {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+            },
+            {
+            "inputs": [
+                {
+                "internalType": "string",
+                "name": "_ipfsHash",
+                "type": "string"
+                }
+            ],
+            "name": "addFileHash",
+            "outputs": [
+                {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+                }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+            },
+            {
+            "inputs": [
+                {
+                "internalType": "uint256",
+                "name": "_fileId",
+                "type": "uint256"
+                }
+            ],
+            "name": "getFileHash",
+            "outputs": [
+                {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
             }
         ];
         
