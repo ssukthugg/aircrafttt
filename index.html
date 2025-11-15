@@ -132,7 +132,7 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 border-t pt-8">
                     <!-- Graph -->
                     <div>
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Variable Depreciation (MR) Trend Chart</h3>
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Residual Value (RV) Trend Chart</h3>
                         <div class="bg-gray-100 p-4 rounded-lg shadow-inner">
                             <canvas id="residualValueChart"></canvas>
                         </div>
@@ -164,7 +164,7 @@
         let lastIpfsHash = ""; // Stores the CID after successful IPFS upload
         
         // Deployed Contract Address (BNB Testnet)
-        // 🚨 중요: 배포된 새 컨트랙트 주소로 아래 값을 반드시 업데이트해야 합니다! 🚨
+        // 🚨 IMPORTANT: You MUST update this value with your deployed contract address! 🚨
         const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
         
         // ABI for the Contract (includes only necessary functions)
@@ -703,7 +703,8 @@
             THEAD_ROW.className = "bg-gray-50";
         
             let dateIndex = -1;
-            let mrIndex = -1;
+            // --- MODIFICATION 1: Change target index from MR to RV ---
+            let rvIndex = -1; // Index for Residual Value (RV) or similar column
             const headersCleaned = [];
         
             headers.forEach((header, index) => {
@@ -715,9 +716,9 @@
                 if (lowerHeader.includes('date') || lowerHeader.includes('inspection')) {
                     dateIndex = index;
                 }
-                // Explicitly target the MR column as requested
-                if (lowerHeader.includes('mr (variable depr.') || lowerHeader.includes('mr (variable depr')) {
-                    mrIndex = index;
+                // --- MODIFICATION 2: Search for 'RV' or 'Residual Value' ---
+                if (lowerHeader.includes('rv') || lowerHeader.includes('residual')) {
+                    rvIndex = index;
                 }
         
                 const th = document.createElement('th');
@@ -726,8 +727,9 @@
                 THEAD_ROW.appendChild(th);
             });
         
-            if (dateIndex === -1 || mrIndex === -1) {
-                console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'MR' (Index: ${mrIndex}) columns in CSV header.`);
+            // --- MODIFICATION 3: Check for rvIndex instead of mrIndex ---
+            if (dateIndex === -1 || rvIndex === -1) {
+                console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'RV' (Index: ${rvIndex}) columns in CSV header.`);
             }
         
             // 3. Parse Body and Extract Chart Data using the new parser
@@ -744,7 +746,8 @@
                 row.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
         
                 let dateValue = null;
-                let mrValue = null;
+                // --- MODIFICATION 4: Change variable name to rvValue ---
+                let rvValue = null;
                 
                 // Iterate up to the expected number of columns to prevent undefined access
                 for (let j = 0; j < expectedColumnCount; j++) {
@@ -760,15 +763,16 @@
                     if (j === dateIndex) { 
                         dateValue = cellValue;
                     }
-                    if (j === mrIndex) { 
+                    // --- MODIFICATION 5: Use rvIndex and assign to rvValue ---
+                    if (j === rvIndex) { 
                         // Enhanced cleaning for numerical values, removing currency symbols and non-digit/non-dot characters
-                        // Use parseFloat on the cleaned cell value
-                        mrValue = parseFloat(cellValue.replace(/[^0-9.]/g, ''));
+                        rvValue = parseFloat(cellValue.replace(/[^0-9.]/g, ''));
                     }
                 }
                 
-                if (dateValue && !isNaN(mrValue)) {
-                    dataForChart.push({ date: dateValue, value: mrValue });
+                // --- MODIFICATION 6: Push rvValue to chart data ---
+                if (dateValue && !isNaN(rvValue)) {
+                    dataForChart.push({ date: dateValue, value: rvValue });
                 }
             }
         
@@ -798,10 +802,12 @@
                 data: {
                     labels: data.map(item => item.date),
                     datasets: [{
-                        label: 'MR (Variable Depr. Accrual) (USD) Trend',
+                        // --- MODIFICATION 7: Change Label Text to RV ---
+                        label: 'RV (Residual Value) (USD) Trend', 
                         data: data.map(item => item.value),
-                        backgroundColor: 'rgba(239, 68, 68, 0.5)', // Red tone for Maintenance Cost/Accrual
-                        borderColor: 'rgb(239, 68, 68)',
+                        // Using a blue color for value
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)', 
+                        borderColor: 'rgb(59, 130, 246)',
                         tension: 0.3,
                         fill: true
                     }]
@@ -810,12 +816,14 @@
                     responsive: true,
                     plugins: {
                         legend: { position: 'top' },
-                        title: { display: true, text: 'Variable Depreciation (MR) Accrual Trend Over Time' }
+                        // --- MODIFICATION 8: Change Title Text to RV ---
+                        title: { display: true, text: 'Residual Value (RV) Trend Over Time' } 
                     },
                     scales: {
                         y: { 
                             beginAtZero: false, 
-                            title: { display: true, text: 'MR Accrual (USD)' },
+                            // --- MODIFICATION 9: Change Y-Axis Title to RV ---
+                            title: { display: true, text: 'Residual Value (RV) (USD)' }, 
                             ticks: {
                                 callback: function(value) {
                                     // Format y-axis ticks as currency
