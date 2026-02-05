@@ -3,749 +3,309 @@
 // =========================================================================
 let web3;
 let contract;
-let chartInstance = null; // To store the Chart.js instance
-let lastIpfsHash = ""; // NEW: Stores the CID after successful IPFS upload
+let chartInstance = null;
+let lastIpfsHash = "";
 
-// Deployed Contract Address (BNB Testnet)
-// !!! 이 주소를 새롭게 배포된 컨트랙트 주소로 업데이트해야 합니다 !!!
-// (재배포 후, Truffle 출력의 'contract address'를 여기에 붙여넣으세요)
 const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
+const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
 
-// ABI for the Contract (includes only necessary functions)
-// !!! 솔리디티 컨트랙트의 인터페이스(함수, 이벤트)가 변경되었다면, 
-// !!! Truffle이 생성한 JSON 파일에서 이 CONTRACT_ABI 배열을 통째로 복사해서 붙여넣으세요.
 const CONTRACT_ABI = [
     {
-      "inputs": [
-        {
-          "internalType": "address[]",
-          "name": "_admins",
-          "type": "address[]"
-        }
-      ],
+      "inputs": [{ "internalType": "address[]", "name": "_admins", "type": "address[]" }],
       "stateMutability": "nonpayable",
       "type": "constructor"
     },
     {
       "anonymous": false,
       "inputs": [
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "fileId",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "string",
-          "name": "ipfsHash",
-          "type": "string"
-        }
+        { "indexed": false, "internalType": "uint256", "name": "fileId", "type": "uint256" },
+        { "indexed": false, "internalType": "string", "name": "ipfsHash", "type": "string" }
       ],
       "name": "FileHashRecorded",
       "type": "event"
     },
     {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
+      "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
       "name": "fileHashes",
-      "outputs": [
-        {
-          "internalType": "string",
-          "name": "",
-          "type": "string"
-        }
-      ],
+      "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
       "stateMutability": "view",
       "type": "function",
       "constant": true
     },
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
+      "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
       "name": "isAdmin",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
+      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
       "stateMutability": "view",
       "type": "function",
       "constant": true
     },
     {
-      "inputs": [
-        {
-          "internalType": "string",
-          "name": "_ipfsHash",
-          "type": "string"
-        }
-      ],
+      "inputs": [{ "internalType": "string", "name": "_ipfsHash", "type": "string" }],
       "name": "addFileHash",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "_fileId",
-          "type": "uint256"
-        }
-      ],
+      "inputs": [{ "internalType": "uint256", "name": "_fileId", "type": "uint256" }],
       "name": "getFileHash",
-      "outputs": [
-        {
-          "internalType": "string",
-          "name": "",
-          "type": "string"
-        }
-      ],
+      "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
       "stateMutability": "view",
       "type": "function",
       "constant": true
     }
 ];
 
-const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
-
+// --- Aircraft Specific Parameters ---
+const AIRCRAFT_PARAMS = {
+    "B787": { initialPrice: 190000000, permDepr: 1185.36, varDepr: 2406.64, annualEconRate: 0.04 },
+    "B737 NG": { initialPrice: 80000000, permDepr: 715.61, varDepr: 1452.90, annualEconRate: 0.04 },
+    "A320": { initialPrice: 77000000, permDepr: 796.79, varDepr: 1617.72, annualEconRate: 0.04 },
+    "B777": { initialPrice: 140000000, permDepr: 1568.66, varDepr: 3184.85, annualEconRate: 0.04 },
+    "A330": { initialPrice: 175000000, permDepr: 1291.46, varDepr: 2622.05, annualEconRate: 0.04 },
+    "B767": { initialPrice: 150000000, permDepr: 1101.38, varDepr: 2236.13, annualEconRate: 0.04 },
+    "DEFAULT": { initialPrice: 80000000, permDepr: 700.00, varDepr: 1400.00, annualEconRate: 0.04 }
+};
 
 // =========================================================================
-// UI Functions (Defined as global functions for HTML onclick stability)
+// RV Calculation Core Logic
 // =========================================================================
 
-/**
- * Sets the active tab view.
- * @param {string} tabName - The name of the tab (e.g., 'upload', 'view').
- */
-function setActiveTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('.tab-button').forEach(el => {
-        el.classList.remove('border-blue-600', 'text-blue-600');
-        el.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-    });
-
-    document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.remove('hidden');
-    const activeTabButton = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-    activeTabButton.classList.add('border-blue-600', 'text-blue-600');
-    activeTabButton.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+function detectModel(filename) {
+    const upperName = filename.toUpperCase();
+    if (upperName.includes("B787")) return "B787";
+    if (upperName.includes("B737")) return "B737 NG";
+    if (upperName.includes("A320")) return "A320";
+    if (upperName.includes("B777")) return "B777";
+    if (upperName.includes("A330")) return "A330";
+    if (upperName.includes("B767")) return "B767";
+    return "DEFAULT";
 }
 
-/**
- * Handles the IPFS Upload step.
- */
-async function handleIpfsUpload() {
-    const apiKey = document.getElementById('apiKey').value.trim();
-    const apiSecret = document.getElementById('apiSecret').value.trim();
-    const fileInput = document.getElementById('fileInput'); 
+async function handleFileUploadAndRecord() {
+    const fileInput = document.getElementById('maintenanceFile');
+    const fileId = document.getElementById('fileIdInput').value;
+    const pinataKey = document.getElementById('pinataApiKey').value;
+    const pinataSecret = document.getElementById('pinataApiSecret').value;
+
+    if (!fileInput.files[0] || !fileId || !pinataKey || !pinataSecret) {
+        return alert("Please provide Aircraft ID, CSV file, and Pinata Keys.");
+    }
+
     const file = fileInput.files[0];
-    const button = document.getElementById('ipfsUploadButton');
-    const recordButton = document.getElementById('recordOnlyButton');
+    const reader = new FileReader();
 
-    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
-    if (!apiKey || !apiSecret) return alert("Please enter your Pinata API Key and Secret Key.");
-    if (!file) return alert("Please select a CSV file containing maintenance data to upload.");
-
-    button.disabled = true;
-    recordButton.disabled = true;
-    button.textContent = "1. Uploading to IPFS...";
-    document.getElementById('uploadStatus').textContent = "Status: 1. Starting IPFS upload process...";
-    
-    try {
-        // 1. IPFS Upload
-        const ipfsFileHash = await uploadToIPFS(file, apiKey, apiSecret);
+    reader.onload = async (e) => {
+        const csvText = e.target.result;
+        const modelKey = detectModel(file.name);
+        const params = AIRCRAFT_PARAMS[modelKey];
         
-        // Success
-        lastIpfsHash = ipfsFileHash; // Store the hash
-        document.getElementById('uploadStatus').innerHTML = `✅ **IPFS Upload Success!** CID: ${ipfsFileHash.substring(0, 10)}...`;
-        document.getElementById('ipfsHashDisplay').classList.remove('hidden');
-        document.getElementById('ipfsHashDisplay').innerHTML = `Last Uploaded CID: ${ipfsFileHash}`;
-
-        // Enable the next step only if the user is an Admin
-        const accounts = await web3.eth.getAccounts();
-        const isAdminUser = await contract.methods.isAdmin(accounts[0]).call();
-
-        if (isAdminUser) {
-            recordButton.disabled = false;
-            recordButton.textContent = "2. Record CID on Blockchain (Ready)";
-        } else {
-            document.getElementById('uploadStatus').innerHTML += `<br><span class="text-red-500">❌ Error: Only Admin can proceed to Blockchain Recording.</span>`;
-        }
-
-    } catch (error) {
-        lastIpfsHash = ""; // Clear hash on failure
-        document.getElementById('ipfsHashDisplay').classList.add('hidden');
-        document.getElementById('uploadStatus').textContent = `❌ IPFS Upload Failed: ${error.message}`;
-        console.error("IPFS Upload Error:", error);
-    } finally {
-        button.disabled = false;
-        button.textContent = "1. Upload File to IPFS";
-    }
-}
-
-/**
- * Records the stored IPFS hash (CID) onto the smart contract.
- * Uses lastIpfsHash global variable.
- */
-async function handleRecordOnly() {
-    const recordButton = document.getElementById('recordOnlyButton');
-    
-    if (!lastIpfsHash) return alert("Please upload a file to IPFS first (Step 1).");
-    
-    recordButton.disabled = true;
-    recordButton.textContent = "2. Recording to Blockchain...";
-    document.getElementById('uploadStatus').textContent = `Status: 2. Recording Maintenance Data CID to Blockchain...`;
-
-    const accounts = await web3.eth.getAccounts();
-    const senderAccount = accounts[0]; 
-
-    try {
-        const tx = await contract.methods.addFileHash(lastIpfsHash)
-            .send({
-                from: senderAccount
-            });
+        // 1. Calculate RV & MR Locally
+        const processedData = calculateRVLocally(csvText, params);
         
-        // Extract fileId (Record ID) from the event log
-        const fileId = tx.events.FileHashRecorded.returnValues.fileId;
+        // 2. Convert back to CSV for IPFS
+        const newCsvContent = jsonToCsv(processedData);
+        const processedFile = new File([newCsvContent], `PROCESSED_${file.name}`, { type: 'text/csv' });
 
-        document.getElementById('uploadStatus').innerHTML = `✅ **SUCCESS!** Maintenance Record CID recorded. (File ID: <span class="font-bold text-green-600">${fileId}</span>) <br>Tx Hash: ${tx.transactionHash.substring(0, 10)}...`;
-        
-        // Clear state after success
-        lastIpfsHash = "";
-        document.getElementById('ipfsHashDisplay').classList.add('hidden');
-
-    } catch (error) {
-        let errorMessage = "Blockchain recording failed.";
-        
-        if (error.message && error.message.includes("insufficient funds")) {
-            errorMessage = "Blockchain Recording Failed: Insufficient tBNB balance for gas.";
-        } else if (error.message && (error.message.includes("revert") || error.message.includes("denied") || error.message.includes("Only admin"))) {
-            // This captures the Checksum/Admin issue
-            errorMessage = "Blockchain Recording Failed: Transaction reverted. **Possible Admin/Permission issue (Checksum Mismatch)** or contract logic error.";
-        } else if (error.message && error.message.includes("User denied transaction signature")) {
-            errorMessage = "Blockchain Recording Failed: Transaction was manually rejected by the user.";
-        } else {
-            errorMessage = `Blockchain Recording Failed: ${error.message.substring(0, 100)}...`;
-        }
-
-        document.getElementById('uploadStatus').textContent = `❌ ${errorMessage}`;
-        console.error("Blockchain transaction error:", error);
-    } finally {
-        recordButton.disabled = false;
-        recordButton.textContent = "2. Record CID on Blockchain";
-        updateStatus(); // Re-check status to potentially disable/enable buttons based on new state
-    }
-}
-
-/**
- * Main function to retrieve the record, fetch data from IPFS, and visualize it.
- */
-async function viewRecordAndAnalyze() {
-    if (!web3 || !contract) return alert("Please connect to MetaMask and ensure the BNB Testnet is selected.");
-
-    const fileId = document.getElementById('recordIdInput').value;
-    const viewButton = document.getElementById('viewButton');
-    const statusDiv = document.getElementById('viewStatus');
-    
-    if (!fileId || isNaN(fileId) || fileId <= 0) {
-        statusDiv.textContent = "Please enter a valid Maintenance Record ID (e.g., 1).";
-        return;
-    }
-
-    viewButton.disabled = true;
-    viewButton.textContent = "Searching...";
-    statusDiv.textContent = `1. Querying Blockchain for Maintenance Record ID ${fileId}...`;
-    
-    try {
-        // 1. Retrieve CID from Blockchain
-        const ipfsHash = await contract.methods.getFileHash(fileId).call();
-        
-        if (ipfsHash.length === 0 || ipfsHash === '0x') {
-            throw new Error(`Maintenance Record ID ${fileId} not found on the blockchain. The record may not exist or the ID is invalid.`);
-        }
-
-        statusDiv.textContent = `2. CID Found: ${ipfsHash.substring(0, 10)}... Fetching data from IPFS Gateway...`;
-
-        // 2. Fetch CSV data from IPFS Gateway
-        const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-        
-        const response = await fetch(gatewayUrl); 
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
-        }
-
-        const csvText = await response.text();
-        
-        // --- CRITICAL DEBUGGING LOG ---
-        console.log("--- RAW DATA RETRIEVED FROM IPFS GATEWAY ---");
-        console.log(csvText.substring(0, 500) + (csvText.length > 500 ? '...' : ''));
-        console.log("-------------------------------------------");
-        // ------------------------------
-        
-        if (csvText.length === 0) {
-             throw new Error("Retrieved data is empty. Check the file content on Pinata and the gateway status.");
-        }
-        
-        // 3. Parse CSV and extract data for table/chart
-        const dataForChart = csvToHtmlTable(csvText);
-        
-        // 4. Render Chart
-        renderResidualValueChart(dataForChart);
-
-        statusDiv.innerHTML = `✅ **SUCCESS!** Data retrieved and analyzed. CID: <a href="${gatewayUrl}" target="_blank" class="text-blue-600 underline">${ipfsHash}</a>`;
-
-    } catch (error) {
-        document.getElementById('dataTable').innerHTML = `<p class="p-4 text-red-500">Error: Failed to retrieve or process data.</p>`;
-        statusDiv.textContent = `❌ Error: ${error.message}`;
-        console.error("View/Analyze Error:", error);
-    } finally {
-        viewButton.disabled = false;
-        viewButton.textContent = "Retrieve Record and Start Analysis";
-    }
-}
-
-
-// =========================================================================
-// Web3 and Wallet Connection
-// =========================================================================
-
-/**
- * Initializes Web3 and connects to MetaMask.
- */
-async function initWeb3() {
-    if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
         try {
-            await window.ethereum.request({ method: 'eth_requestAccounts' });
-            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-            updateStatus();
+            showStatus("Uploading processed data to IPFS...", "blue");
+            const cid = await uploadToIPFS(processedFile, pinataKey, pinataSecret);
+            lastIpfsHash = cid;
             
-            window.ethereum.on('accountsChanged', updateStatus);
-            window.ethereum.on('chainChanged', () => { window.location.reload(); });
-
-        } catch (error) {
-            console.error("MetaMask connection failed:", error);
-            document.getElementById('accountStatus').textContent = "Wallet Status: Connection Failed (Check MetaMask)";
+            showStatus(`IPFS Success: ${cid.substring(0, 15)}... Recording on Blockchain...`, "blue");
+            
+            const accounts = await web3.eth.getAccounts();
+            await contract.methods.addFileHash(cid).send({ from: accounts[0] });
+            
+            showStatus(`✅ Success! Aircraft ${fileId} data recorded with Model: ${modelKey}`, "green");
+            renderUI(processedData);
+        } catch (err) {
+            showStatus(`Error: ${err.message}`, "red");
         }
-    } else {
-        document.getElementById('accountStatus').textContent = "Wallet Status: Please install MetaMask!";
-    }
+    };
+    reader.readAsText(file);
 }
 
-/**
- * Updates the wallet connection status and checks if the connected user is Admin.
- */
-async function updateStatus() {
-    if (!web3 || !contract) return;
-
-    const accounts = await web3.eth.getAccounts();
-    const selectedAccount = accounts[0];
-    const networkId = await web3.eth.net.getId();
-    
-    // Check for BNB Testnet (ID 97)
-    if (networkId.toString() !== '97') {
-            document.getElementById('networkStatus').innerHTML = `Network ID: <span class="text-red-500 font-bold">ERROR: Connect to BNB Testnet (ID 97)</span>`;
-    } else {
-        document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
-    }
-    
-    // Admin Status Check
-    let adminStatus = "Checking Admin status...";
-    let isAdminUser = false;
-    
-    if (selectedAccount) {
-        try {
-            // Check if the connected account is an Admin (uses the new mapping function)
-            isAdminUser = await contract.methods.isAdmin(selectedAccount).call();
-            if (isAdminUser) {
-                adminStatus = '<span class="text-green-600 font-bold">✅ Admin (Permission Granted)</span>';
-            } else {
-                adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
-            }
-        } catch(error) {
-            console.error("Admin check failed:", error);
-            adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
-        }
-    }
-
-
-    if (selectedAccount) {
-        const balanceWei = await web3.eth.getBalance(selectedAccount);
-        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-        
-        document.getElementById('accountStatus').innerHTML = `Account (Connected): ${selectedAccount} <br>Admin Status: ${adminStatus}`;
-        document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
-        
-        // Only enable IPFS upload button if there is an account
-        document.getElementById('ipfsUploadButton').disabled = !selectedAccount;
-        
-        // If there's a pending CID, enable the record button if they are an admin.
-        if (lastIpfsHash && isAdminUser) {
-             document.getElementById('recordOnlyButton').disabled = false;
-             document.getElementById('recordOnlyButton').textContent = "2. Record CID on Blockchain (Ready)";
-        }
-
-    } else {
-        document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
-        document.getElementById('ipfsUploadButton').disabled = true;
-        document.getElementById('recordOnlyButton').disabled = true;
-    }
-}
-
-
-/**
- * Uploads the file to IPFS via Pinata service.
- * @param {File} file - The file to upload.
- * @param {string} apiKey - Pinata API Key.
- * @param {string} apiSecret - Pinata Secret Key.
- * @returns {Promise<string>} The IPFS Content Identifier (CID).
- */
-async function uploadToIPFS(file, apiKey, apiSecret) {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const pinataMetadata = JSON.stringify({ name: file.name });
-    formData.append('pinataMetadata', pinataMetadata);
-
-    try {
-        const response = await fetch(PINATA_URL, {
-            method: 'POST',
-            headers: {
-                'pinata_api_key': apiKey,
-                'pinata_secret_api_key': apiSecret
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error('Pinata API Error: ' + response.status + ' - ' + errorText.substring(0, 100) + '...');
-        }
-        
-        const json = await response.json();
-        return json.IpfsHash; // Return the CID
-        
-    } catch (error) {
-        console.error("IPFS Upload Error:", error);
-        throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
-    }
-}
-
-/**
- * Parses CSV text into an HTML table and extracts data for charting.
- * The logic is highly defensive against common CSV parsing errors (like missing cells or extra commas).
- * @param {string} csvText - The raw CSV content.
- * @returns {Array<{date: string, value: number}>} Data points for the chart.
- */
-function csvToHtmlTable(csvText) {
-    if (!csvText || typeof csvText !== 'string' || csvText.trim().length === 0) {
-        console.error("CSV Parsing Error: Input text is not a valid string or is empty.");
-        throw new Error("CSV Parsing failed: Retrieved data is empty or malformed.");
-    }
-    
+function calculateRVLocally(csvText, params) {
     const lines = csvText.trim().split(/\r?\n/);
-    if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
-
-    // 1. Create a responsive wrapper for horizontal scrolling
-    const tableWrapper = document.createElement('div');
-    tableWrapper.className = "overflow-x-auto"; // Key class for horizontal scrolling
-
-    const table = document.createElement('table');
-    table.className = "min-w-full divide-y divide-gray-200 border border-gray-300";
-    const thead = table.createTHead();
-    const tbody = table.createTBody();
-    
-    tableWrapper.appendChild(table); // Append table to the new wrapper
-
-    // 2. Parse Headers (First Line) and find required indices
     const headers = lines[0].split(',');
-    const THEAD_ROW = thead.insertRow();
-    THEAD_ROW.className = "bg-gray-50";
+    
+    // Column Mapping
+    const idx = {
+        date: headers.findIndex(h => h.toLowerCase().includes('date')),
+        tis: headers.findIndex(h => h.toLowerCase().includes('tis')),
+        work: headers.findIndex(h => h.toLowerCase().includes('work type'))
+    };
 
-    let dateIndex = -1;
-    let mrIndex = -1;
-    const headersCleaned = [];
+    let currentRV = params.initialPrice;
+    let accumulatedMR = 0;
+    let lastTis = 0;
+    let startDate = null;
 
-    headers.forEach((header, index) => {
-        const headerValue = (header || '').trim().replace(/"/g, '');
-        headersCleaned.push(headerValue);
-        
-        // Find required column indices (case-insensitive and partial match)
-        const lowerHeader = headerValue.toLowerCase();
-        if (lowerHeader.includes('date') || lowerHeader.includes('inspection')) {
-            dateIndex = index;
-        }
-        // Explicitly target the MR column as requested
-        if (lowerHeader.includes('mr (variable depr.') || lowerHeader.includes('mr (variable depr')) {
-            mrIndex = index;
-        }
-
-        const th = document.createElement('th');
-        th.textContent = headerValue; 
-        th.className = "px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[120px]"; // Added min-width for better column sizing
-        THEAD_ROW.appendChild(th);
-    });
-
-    if (dateIndex === -1 || mrIndex === -1) {
-        console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'MR' (Index: ${mrIndex}) columns in CSV header.`);
-    }
-
-    // 3. Parse Body and Extract Chart Data
-    const dataForChart = [];
-    const expectedColumnCount = headersCleaned.length;
+    const result = [];
 
     for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line === '') continue;
-        
-        // Use simple split (potential issue source, but we mitigate with safety checks below)
-        const cells = line.split(',');
-        const row = tbody.insertRow();
-        row.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
+        const cells = lines[i].split(',');
+        const dateStr = cells[idx.date];
+        const currentTis = parseFloat(cells[idx.tis]) || 0;
+        const workType = cells[idx.work] || "";
+        const currentDate = new Date(dateStr);
 
-        let dateValue = null;
-        let mrValue = null;
-        
-        // Iterate up to the expected number of columns to prevent undefined access
-        for (let j = 0; j < expectedColumnCount; j++) {
-            // Get cell content, use empty string if undefined (out of bounds due to missing trailing fields)
-            const cell = cells[j] !== undefined ? cells[j] : '';
-            
-            // Ensure content is a string before calling trim()
-            const value = String(cell).trim().replace(/"/g, '');
-            
-            // Populate HTML Table
-            const td = row.insertCell();
-            td.textContent = value;
-            td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500 min-w-[120px]"; // Added min-width to cells
-            
-            // Extract chart data using fixed indices
-            if (j === dateIndex) { 
-                dateValue = value;
-            }
-            if (j === mrIndex) { 
-                // Enhanced cleaning for numerical values, removing currency symbols and non-digit/non-dot characters
-                mrValue = parseFloat(value.replace(/[^0-9.]/g, ''));
-            }
+        if (i === 1) startDate = currentDate;
+
+        // A. TIS Based Depreciation
+        const deltaTis = currentTis - lastTis;
+        const permDeprAmt = deltaTis * params.permDepr;
+        const varDeprAmt = deltaTis * params.varDepr;
+
+        // B. Time Based Economic Depreciation
+        const yearsPassed = (currentDate - startDate) / (1000 * 60 * 60 * 24 * 365);
+        const econDeprAmt = (params.initialPrice * params.annualEconRate) * (deltaTis / 2000); // Normalized to 2000 hrs/yr
+
+        // Update Values
+        currentRV -= (permDeprAmt + econDeprAmt);
+        accumulatedMR += varDeprAmt;
+
+        // C. Major Check Logic (Recapture & Reset)
+        let note = "";
+        if (workType.includes('B-Check') || workType.includes('C-Check') || workType.includes('D-Check')) {
+            currentRV += accumulatedMR;
+            note = `Recaptured $${accumulatedMR.toFixed(0)} MR`;
+            accumulatedMR = 0;
         }
-        
-        if (dateValue && !isNaN(mrValue)) {
-            dataForChart.push({ date: dateValue, value: mrValue });
-        }
+
+        result.push({
+            date: dateStr,
+            tis: currentTis,
+            workType: workType,
+            rv: currentRV,
+            mr: accumulatedMR,
+            note: note
+        });
+
+        lastTis = currentTis;
     }
-
-    document.getElementById('dataTable').innerHTML = '';
-    // Append the entire wrapper (which contains the table) to the dataTable container
-    document.getElementById('dataTable').appendChild(tableWrapper);
-    
-    return dataForChart;
+    return result;
 }
 
-/**
- * Renders the Chart.js line graph for residual value trend.
- * @param {Array<{date: string, value: number}>} data - The data points.
- */
-function renderResidualValueChart(data) {
-    const ctx = document.getElementById('residualValueChart').getContext('2d');
+// =========================================================================
+// Blockchain & IPFS Helpers
+// =========================================================================
 
-    if (chartInstance) {
-        chartInstance.destroy();
+async function searchBlockchain() {
+    const id = document.getElementById('searchFileId').value;
+    const statusDiv = document.getElementById('searchResult');
+    try {
+        const cid = await contract.methods.getFileHash(id).call();
+        if (!cid) throw new Error("ID not found");
+        
+        statusDiv.classList.remove('hidden');
+        statusDiv.innerHTML = `Found CID: <a href="https://gateway.pinata.cloud/ipfs/${cid}" target="_blank" class="text-blue-600 underline">${cid}</a>`;
+        
+        // Fetch and show chart
+        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`);
+        const csvText = await response.text();
+        const data = parseProcessedCsv(csvText);
+        renderUI(data);
+    } catch (e) {
+        alert("Search failed: " + e.message);
     }
-    
-    // Sort data by date before charting (assuming YYYY-MM-DD format)
-    data.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
 
+async function uploadToIPFS(file, key, secret) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(PINATA_URL, {
+        method: 'POST',
+        headers: { 'pinata_api_key': key, 'pinata_secret_api_key': secret },
+        body: formData
+    });
+    const json = await response.json();
+    return json.IpfsHash;
+}
+
+// =========================================================================
+// UI & Visualization
+// =========================================================================
+
+function renderUI(data) {
+    const resultsArea = document.getElementById('resultsArea');
+    resultsArea.classList.remove('hidden');
+
+    // 1. Render Table
+    let html = `<table class="min-w-full"><thead><tr class="bg-gray-100">
+        <th class="p-2 text-left">Date</th><th class="p-2 text-left">TIS</th>
+        <th class="p-2 text-left">RV (USD)</th><th class="p-2 text-left">MR Balance</th>
+        <th class="p-2 text-left">Event</th></tr></thead><tbody>`;
+    
+    data.forEach(row => {
+        html += `<tr class="border-b">
+            <td class="p-2">${row.date}</td><td class="p-2">${row.tis}</td>
+            <td class="p-2 font-bold text-blue-700">$${row.rv.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+            <td class="p-2 text-red-600">$${row.mr.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+            <td class="p-2 text-xs italic text-green-600">${row.note}</td>
+        </tr>`;
+    });
+    html += "</tbody></table>";
+    document.getElementById('tableContainer').innerHTML = html;
+
+    // 2. Render Chart
+    const ctx = document.getElementById('rvChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.map(item => item.date),
+            labels: data.map(d => d.date),
             datasets: [{
-                label: 'MR (Variable Depr. Accrual) (USD) Trend',
-                data: data.map(item => item.value),
-                backgroundColor: 'rgba(239, 68, 68, 0.5)', // Red tone for Maintenance Cost/Accrual
-                borderColor: 'rgb(239, 68, 68)',
-                tension: 0.3,
-                fill: true
+                label: 'Residual Value (RV)',
+                data: data.map(d => d.rv),
+                borderColor: '#1e40af',
+                tension: 0.1,
+                fill: false
             }]
         },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { position: 'top' },
-                title: { display: true, text: 'Variable Depreciation (MR) Accrual Trend Over Time' }
-            },
-            scales: {
-                y: { 
-                    beginAtZero: false, 
-                    title: { display: true, text: 'MR Accrual (USD)' },
-                    ticks: {
-                        callback: function(value) {
-                            // Format y-axis ticks as currency
-                            return '$' + value.toLocaleString();
-                        }
-                    }
-                },
-                x: { title: { display: true, text: 'Date of Maintenance/Inspection' } }
-            }
-        }
+        options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
+function jsonToCsv(json) {
+    const headers = Object.keys(json[0]).join(",");
+    const rows = json.map(row => Object.values(row).join(","));
+    return [headers, ...rows].join("\n");
+}
 
-// =========================================================================
-// Web3 and Wallet Connection
-// =========================================================================
+function parseProcessedCsv(csv) {
+    const lines = csv.trim().split("\n");
+    const headers = lines[0].split(",");
+    return lines.slice(1).map(line => {
+        const values = line.split(",");
+        return {
+            date: values[0],
+            tis: parseFloat(values[1]),
+            workType: values[2],
+            rv: parseFloat(values[3]),
+            mr: parseFloat(values[4]),
+            note: values[5]
+        };
+    });
+}
 
-/**
- * Initializes Web3 and connects to MetaMask.
- */
+function showStatus(msg, color) {
+    const el = document.getElementById('statusMessage');
+    el.classList.remove('hidden', 'bg-blue-100', 'bg-green-100', 'bg-red-100');
+    el.classList.add(`bg-${color}-100`);
+    el.textContent = msg;
+}
+
 async function initWeb3() {
     if (window.ethereum) {
         web3 = new Web3(window.ethereum);
-        try {
-            await window.ethereum.request({ method: 'eth_requestAccounts' });
-            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-            updateStatus();
-            
-            window.ethereum.on('accountsChanged', updateStatus);
-            window.ethereum.on('chainChanged', () => { window.location.reload(); });
-
-        } catch (error) {
-            console.error("MetaMask connection failed:", error);
-            document.getElementById('accountStatus').textContent = "Wallet Status: Connection Failed (Check MetaMask)";
-        }
-    } else {
-        document.getElementById('accountStatus').textContent = "Wallet Status: Please install MetaMask!";
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+        const accounts = await web3.eth.getAccounts();
+        document.getElementById('walletAddress').textContent = accounts[0].substring(0, 15) + "...";
     }
 }
 
-/**
- * Updates the wallet connection status and checks if the connected user is Admin.
- */
-async function updateStatus() {
-    if (!web3 || !contract) return;
-
-    const accounts = await web3.eth.getAccounts();
-    const selectedAccount = accounts[0];
-    const networkId = await web3.eth.net.getId();
-    
-    // Check for BNB Testnet (ID 97)
-    if (networkId.toString() !== '97') {
-            document.getElementById('networkStatus').innerHTML = `Network ID: <span class="text-red-500 font-bold">ERROR: Connect to BNB Testnet (ID 97)</span>`;
-    } else {
-        document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
-    }
-    
-    // Admin Status Check
-    let adminStatus = "Checking Admin status...";
-    let isAdminUser = false;
-    
-    if (selectedAccount) {
-        try {
-            // Check if the connected account is an Admin (uses the new mapping function)
-            isAdminUser = await contract.methods.isAdmin(selectedAccount).call();
-            if (isAdminUser) {
-                adminStatus = '<span class="text-green-600 font-bold">✅ Admin (Permission Granted)</span>';
-            } else {
-                adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
-            }
-        } catch(error) {
-            console.error("Admin check failed:", error);
-            adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
-        }
-    }
-
-
-    if (selectedAccount) {
-        const balanceWei = await web3.eth.getBalance(selectedAccount);
-        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-        
-        document.getElementById('accountStatus').innerHTML = `Account (Connected): ${selectedAccount} <br>Admin Status: ${adminStatus}`;
-        document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
-        
-        // Only enable IPFS upload button if there is an account
-        document.getElementById('ipfsUploadButton').disabled = !selectedAccount;
-        
-        // If there's a pending CID, enable the record button if they are an admin.
-        if (lastIpfsHash && isAdminUser) {
-             document.getElementById('recordOnlyButton').disabled = false;
-             document.getElementById('recordOnlyButton').textContent = "2. Record CID on Blockchain (Ready)";
-        }
-
-    } else {
-        document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
-        document.getElementById('ipfsUploadButton').disabled = true;
-        document.getElementById('recordOnlyButton').disabled = true;
-    }
-}
-
-
-/**
- * Uploads the file to IPFS via Pinata service.
- * @param {File} file - The file to upload.
- * @param {string} apiKey - Pinata API Key.
- * @param {string} apiSecret - Pinata Secret Key.
- * @returns {Promise<string>} The IPFS Content Identifier (CID).
- */
-async function uploadToIPFS(file, apiKey, apiSecret) {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const pinataMetadata = JSON.stringify({ name: file.name });
-    formData.append('pinataMetadata', pinataMetadata);
-
-    try {
-        const response = await fetch(PINATA_URL, {
-            method: 'POST',
-            headers: {
-                'pinata_api_key': apiKey,
-                'pinata_secret_api_key': apiSecret
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error('Pinata API Error: ' + response.status + ' - ' + errorText.substring(0, 100) + '...');
-        }
-        
-        const json = await response.json();
-        return json.IpfsHash; // Return the CID
-        
-    } catch (error) {
-        console.error("IPFS Upload Error:", error);
-        throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
-    }
-}
-
-
-// =========================================================================
-// Initialization
-// =========================================================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    initWeb3();
-    document.getElementById('ipfsUploadButton').disabled = true; // Disable until MetaMask is connected
-    document.getElementById('recordOnlyButton').disabled = true;
-    setActiveTab('upload'); 
-});
+document.addEventListener('DOMContentLoaded', initWeb3);
