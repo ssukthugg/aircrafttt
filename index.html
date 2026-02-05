@@ -3,851 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aircraft Maintenance Record DApp</title>
-    <!-- Load Tailwind CSS -->
+    <title>AeroValue: Blockchain Aircraft RV Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Web3.js -->
     <script src="https://cdn.jsdelivr.net/npm/web3@1.8.1/dist/web3.min.js"></script>
-    <!-- Load Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
-        /* Custom scrollbar style for better visibility, especially for the table wrapper */
-        .overflow-x-auto::-webkit-scrollbar {
-            height: 8px;
-        }
-        .overflow-x-auto::-webkit-scrollbar-thumb {
-            background-color: rgba(107, 114, 128, 0.5);
-            border-radius: 4px;
-        }
-        .overflow-x-auto::-webkit-scrollbar-track {
-            background-color: rgba(229, 231, 235, 0.5);
-        }
-        /* Highlight the contract address area for easy updates */
-        .contract-address-note {
-            background-color: #fef3c7; /* yellow-100 */
-            border-left: 4px solid #f59e0b; /* yellow-500 */
-            padding: 1rem;
-            margin-bottom: 1rem;
-            font-size: 0.875rem;
-            color: #78350f; /* yellow-900 */
-            border-radius: 0.5rem;
-        }
+        .overflow-x-auto::-webkit-scrollbar { height: 8px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background-color: rgba(107, 114, 128, 0.5); border-radius: 4px; }
+        .contract-address-note { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
-        <header class="text-center py-6 border-b border-blue-200 mb-8">
-            <h1 class="text-4xl font-extrabold text-blue-800 tracking-tight">
-                Decentralized Aircraft Maintenance Records
+    <nav class="bg-blue-900 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold flex items-center">
+                <span class="mr-2">✈️</span> AeroValue DApp
             </h1>
-            <p class="mt-2 text-lg text-gray-600">Securely store and verify maintenance data using Blockchain and IPFS.</p>
-        </header>
-
-        <!-- Wallet Status -->
-        <div class="bg-white shadow-lg rounded-xl p-4 mb-8 border border-gray-200">
-            <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7-8h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2z" />
-                </svg>
-                Wallet Connection Status
-            </h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <p id="accountStatus" class="text-gray-600 break-words md:col-span-2">Account (Connected): Awaiting MetaMask connection...</p>
-                <p id="balanceStatus" class="text-gray-600">Balance: 0 tBNB</p>
-                <p id="networkStatus" class="text-gray-600 md:col-span-3">Network ID: Please connect to BNB Testnet (ID 97)</p>
+            <div id="walletAddress" class="text-sm bg-blue-800 px-3 py-1 rounded-full border border-blue-700 text-blue-100">
+                Wallet not connected
             </div>
         </div>
+    </nav>
 
-        <!-- Tabs Navigation -->
-        <div class="mb-6 border-b border-gray-200">
-            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                <button id="tabUpload" onclick="setActiveTab('upload')" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600">
-                    Upload & Record (Admin)
-                </button>
-                <button id="tabView" onclick="setActiveTab('view')" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                    View & Analyze Record
-                </button>
-            </nav>
+    <main class="container mx-auto py-8 px-4">
+        <!-- Dashboard Header -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-extrabold text-gray-800">Residual Value & Maintenance Records</h2>
+            <p class="text-gray-600 mt-2 text-lg">Calculate aircraft depreciation and record immutable logs on the Binance Smart Chain (BNB Testnet).</p>
         </div>
 
-        <!-- Tab Contents -->
+        <!-- Alert Area -->
+        <div id="statusMessage" class="hidden p-4 rounded-md mb-6 shadow-sm border"></div>
 
-        <!-- Upload Tab -->
-        <div id="contentUpload" class="tab-content">
-            <div class="bg-white shadow-lg rounded-xl p-6 space-y-6">
-                <h2 class="text-2xl font-bold text-gray-800">1. Upload Maintenance CSV</h2>
-                
-                <!-- Pinata Keys Input -->
+        <!-- Configuration Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md border border-gray-100">
+                <h3 class="text-xl font-bold text-gray-700 mb-4 border-b pb-2">Step 1: System Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="apiKey" class="block text-sm font-medium text-gray-700">Pinata API Key</label>
-                        <input type="text" id="apiKey" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Pinata API Key</label>
+                        <input type="password" id="pinataApiKey" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter Pinata Key">
                     </div>
                     <div>
-                        <label for="apiSecret" class="block text-sm font-medium text-gray-700">Pinata Secret Key</label>
-                        <input type="password" id="apiSecret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Pinata Secret Key</label>
+                        <input type="password" id="pinataApiSecret" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter Secret Key">
                     </div>
                 </div>
-
-                <!-- File Input and IPFS Upload -->
-                <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 border-t pt-6">
-                    <input type="file" id="fileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <button id="ipfsUploadButton" onclick="handleIpfsUpload()" disabled class="w-full md:w-auto flex-shrink-0 px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150">
-                        1. Upload File to IPFS
-                    </button>
+                <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                    <p class="text-xs text-blue-800">
+                        <strong>FAA Compliance Note:</strong> All RV calculations follow standard economic depreciation models and FAA Part 91/121 maintenance standards.
+                    </p>
                 </div>
+            </div>
 
-                <div id="ipfsHashDisplay" class="hidden p-3 bg-gray-100 rounded-lg text-sm font-mono break-all"></div>
-
-                <!-- Blockchain Record Step -->
-                <div class="border-t pt-6 space-y-4">
-                    <h2 class="text-2xl font-bold text-gray-800">2. Record CID on Blockchain</h2>
-                    <button id="recordOnlyButton" onclick="handleRecordOnly()" disabled class="w-full md:w-auto px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150">
-                        2. Record CID on Blockchain
-                    </button>
-                    <p id="uploadStatus" class="mt-2 text-sm text-gray-600">Status: Waiting for IPFS upload...</p>
+            <!-- New: Supported Models Guide -->
+            <div class="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+                <h3 class="text-xl font-bold text-gray-700 mb-4 border-b pb-2">Supported Models</h3>
+                <div class="flex flex-wrap gap-2">
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B787-9</span>
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B737 NG</span>
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">A320 Family</span>
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B777</span>
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">A330</span>
+                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B767</span>
                 </div>
+                <p class="text-[10px] text-gray-500 mt-3 leading-tight italic">
+                    * Filename must include the model name (e.g., "B787_Log.csv") to apply specific depreciation variables.
+                </p>
             </div>
         </div>
 
-        <!-- View Tab -->
-        <div id="contentView" class="tab-content hidden">
-            <div class="bg-white shadow-lg rounded-xl p-6 space-y-8">
-                <h2 class="text-2xl font-bold text-gray-800">View and Analyze Maintenance Record</h2>
-                
-                <!-- ID Input and Retrieve Button -->
-                <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end">
-                    <div class="flex-grow">
-                        <label for="recordIdInput" class="block text-sm font-medium text-gray-700">Maintenance Record ID (File ID)</label>
-                        <input type="number" id="recordIdInput" placeholder="e.g., 1" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <button id="viewButton" onclick="viewRecordAndAnalyze()" class="w-full md:w-auto px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150">
-                        Retrieve Record and Start Analysis
-                    </button>
-                </div>
+        <!-- Main Workspace -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+            <div class="flex border-b bg-gray-50">
+                <button onclick="setActiveTab('upload')" id="tab-upload" class="px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600">Upload & Calculate</button>
+                <button onclick="setActiveTab('search')" id="tab-search" class="px-6 py-4 font-bold text-gray-500 hover:text-blue-600 transition">On-Chain Search</button>
+            </div>
 
-                <p id="viewStatus" class="text-sm text-gray-600">Status: Enter a File ID and click retrieve.</p>
-
-                <!-- Data Visualization Area -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 border-t pt-8">
-                    <!-- Graph -->
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Residual Value (RV) Trend Chart</h3>
-                        <div class="bg-gray-100 p-4 rounded-lg shadow-inner">
-                            <canvas id="residualValueChart"></canvas>
+            <div class="p-8">
+                <!-- Upload Tab -->
+                <div id="content-upload">
+                    <div class="max-w-2xl">
+                        <h4 class="text-lg font-bold text-gray-800 mb-4">Calculate RV & Secure on IPFS</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Aircraft ID (Numeric)</label>
+                                <input type="number" id="fileIdInput" class="w-full p-2 border border-gray-300 rounded focus:border-blue-500" placeholder="e.g. 101">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Maintenance Log (CSV)</label>
+                                <input type="file" id="maintenanceFile" accept=".csv" class="w-full p-2 border border-gray-300 rounded bg-gray-50">
+                            </div>
+                            <button id="ipfsUploadButton" onclick="handleFileUploadAndRecord()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition disabled:bg-gray-400">
+                                Calculate RV & Record On-Chain
+                            </button>
                         </div>
                     </div>
-                    
-                    <!-- Table -->
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Raw Maintenance Data Table</h3>
-                        <!-- #dataTable is where the JS now injects the table wrapper with overflow-x-auto -->
-                        <div id="dataTable" class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-                            <p class="p-4 text-sm text-gray-500">Data will appear here after retrieval.</p>
+
+                    <div id="resultsArea" class="mt-12 hidden">
+                        <div class="border-t pt-8">
+                            <h4 class="text-xl font-bold text-gray-800 mb-6">RV Trend Visualization</h4>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 h-[400px]">
+                                <canvas id="rvChart"></canvas>
+                            </div>
+                            
+                            <div class="mt-8">
+                                <h4 class="text-lg font-bold text-gray-800 mb-4">Processed Data Preview</h4>
+                                <div id="tableContainer" class="overflow-x-auto bg-white rounded-lg border border-gray-200 text-sm">
+                                    <!-- Dynamic Table -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search Tab -->
+                <div id="content-search" class="hidden text-center py-12">
+                    <div class="max-w-md mx-auto">
+                        <h4 class="text-xl font-bold text-gray-800 mb-4">Verify Record Integrity</h4>
+                        <div class="flex gap-2">
+                            <input type="number" id="searchFileId" class="flex-1 p-3 border border-gray-300 rounded-lg" placeholder="Enter Aircraft ID">
+                            <button onclick="searchBlockchain()" class="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-black font-bold">Search</button>
+                        </div>
+                        <div id="searchResult" class="mt-8 text-left p-4 bg-gray-50 rounded border border-gray-200 hidden break-all">
+                            <!-- CID result -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
-    <!-- The Javascript file content will be placed here -->
-    <script type="text/javascript">
-        // Included app.js content for single-file operation
-        // All core DApp logic is contained within this script tag.
-        // =========================================================================
-        // Global Variables and Constants
-        // =========================================================================
-        let web3;
-        let contract;
-        let chartInstance = null; // To store the Chart.js instance
-        let lastIpfsHash = ""; // Stores the CID after successful IPFS upload
-        
-        // Deployed Contract Address (BNB Testnet)
-        // 🚨 IMPORTANT: You MUST update this value with your deployed contract address! 🚨
-        const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442"; 
-        
-        // ABI for the Contract (includes only necessary functions)
-        // !!! Update this if your Solidity contract interface changes.
-        const CONTRACT_ABI = [
-            {
-            "inputs": [
-                {
-                "internalType": "address[]",
-                "name": "_admins",
-                "type": "address[]"
-                }
-            ],
-            "stateMutability": "nonpayable",
-            "type": "constructor"
-            },
-            {
-            "anonymous": false,
-            "inputs": [
-                {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "fileId",
-                "type": "uint256"
-                },
-                {
-                "indexed": false,
-                "internalType": "string",
-                "name": "ipfsHash",
-                "type": "string"
-                }
-            ],
-            "name": "FileHashRecorded",
-            "type": "event"
-            },
-            {
-            "inputs": [
-                {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-                }
-            ],
-            "name": "fileHashes",
-            "outputs": [
-                {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function",
-            "constant": true
-            },
-            {
-            "inputs": [
-                {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-                }
-            ],
-            "name": "isAdmin",
-            "outputs": [
-                {
-                "internalType": "bool",
-                "name": "",
-                "type": "bool"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function",
-            "constant": true
-            },
-            {
-            "inputs": [
-                {
-                "internalType": "string",
-                "name": "_ipfsHash",
-                "type": "string"
-                }
-            ],
-            "name": "addFileHash",
-            "outputs": [
-                {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-                }
-            ],
-            "stateMutability": "nonpayable",
-            "type": "function"
-            },
-            {
-            "inputs": [
-                {
-                "internalType": "uint256",
-                "name": "_fileId",
-                "type": "uint256"
-                }
-            ],
-            "name": "getFileHash",
-            "outputs": [
-                {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function",
-            "constant": true
-            }
-        ];
-        
-        const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
-        
-        
-        // =========================================================================
-        // CSV Parsing Utility (New and Improved)
-        // =========================================================================
-        
-        /**
-         * Advanced CSV line parser to handle quoted fields containing commas.
-         * This function is crucial for preventing column misalignment.
-         * @param {string} line - The raw CSV line.
-         * @returns {string[]} An array of cleaned cell values.
-         */
-        function parseCSVLine(line) {
-            const cells = [];
-            let currentCell = '';
-            let inQuotes = false;
-        
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-        
-                if (char === '"') {
-                    // Handle escaped quotes inside a quoted field ("")
-                    if (inQuotes && line[i + 1] === '"') {
-                        currentCell += char;
-                        i++; // Skip the next quote
-                    } else {
-                        // Toggle inQuotes state
-                        inQuotes = !inQuotes;
-                    }
-                } else if (char === ',' && !inQuotes) {
-                    // Found a delimiter outside of quotes
-                    cells.push(currentCell.trim());
-                    currentCell = '';
-                } else {
-                    // Append character to current cell
-                    currentCell += char;
-                }
-            }
-            // Push the last cell
-            cells.push(currentCell.trim());
-        
-            // Final cleaning: remove surrounding quotes from all cells if they exist.
-            return cells.map(cell => cell.replace(/^"|"$/g, ''));
-        }
-
-        // =========================================================================
-        // UI Functions (Defined as global functions for HTML onclick stability)
-        // =========================================================================
-        
-        /**
-         * Sets the active tab view.
-         * @param {string} tabName - The name of the tab (e.g., 'upload', 'view').
-         */
-        function setActiveTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-button').forEach(el => {
-                el.classList.remove('border-blue-600', 'text-blue-600');
-                el.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+    <script src="app.js"></script>
+    <script>
+        function setActiveTab(tab) {
+            ['upload', 'search'].forEach(t => {
+                document.getElementById(`content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).className = 'px-6 py-4 font-bold text-gray-500 hover:text-blue-600';
             });
-        
-            document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.remove('hidden');
-            const activeTabButton = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-            activeTabButton.classList.add('border-blue-600', 'text-blue-600');
-            activeTabButton.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = 'px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600';
         }
-        
-        /**
-         * Handles the IPFS Upload step.
-         */
-        async function handleIpfsUpload() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            const apiSecret = document.getElementById('apiSecret').value.trim();
-            const fileInput = document.getElementById('fileInput'); 
-            const file = fileInput.files[0];
-            const button = document.getElementById('ipfsUploadButton');
-            const recordButton = document.getElementById('recordOnlyButton');
-        
-            if (!web3 || !contract) { 
-                showModal("Connection Error", "Please connect to MetaMask and ensure the BNB Testnet is selected.");
-                return;
-            }
-            if (!apiKey || !apiSecret) {
-                showModal("Missing Keys", "Please enter your Pinata API Key and Secret Key.");
-                return;
-            }
-            if (!file) {
-                showModal("Missing File", "Please select a CSV file containing maintenance data to upload.");
-                return;
-            }
-        
-            button.disabled = true;
-            recordButton.disabled = true;
-            button.textContent = "1. Uploading to IPFS...";
-            document.getElementById('uploadStatus').textContent = "Status: 1. Starting IPFS upload process...";
-            
-            try {
-                // 1. IPFS Upload
-                const ipfsFileHash = await uploadToIPFS(file, apiKey, apiSecret);
-                
-                // Success
-                lastIpfsHash = ipfsFileHash; // Store the hash
-                document.getElementById('uploadStatus').innerHTML = `✅ **IPFS Upload Success!** CID: ${ipfsFileHash.substring(0, 10)}...`;
-                document.getElementById('ipfsHashDisplay').classList.remove('hidden');
-                document.getElementById('ipfsHashDisplay').innerHTML = `Last Uploaded CID: ${ipfsFileHash}`;
-        
-                // Enable the next step only if the user is an Admin
-                const accounts = await web3.eth.getAccounts();
-                const isAdminUser = await contract.methods.isAdmin(accounts[0]).call();
-        
-                if (isAdminUser) {
-                    recordButton.disabled = false;
-                    recordButton.textContent = "2. Record CID on Blockchain (Ready)";
-                } else {
-                    document.getElementById('uploadStatus').innerHTML += `<br><span class="text-red-500">❌ Error: Only Admin can proceed to Blockchain Recording.</span>`;
-                }
-        
-            } catch (error) {
-                lastIpfsHash = ""; // Clear hash on failure
-                document.getElementById('ipfsHashDisplay').classList.add('hidden');
-                document.getElementById('uploadStatus').textContent = `❌ IPFS Upload Failed: ${error.message}`;
-                console.error("IPFS Upload Error:", error);
-            } finally {
-                button.disabled = false;
-                button.textContent = "1. Upload File to IPFS";
-            }
-        }
-        
-        /**
-         * Records the stored IPFS hash (CID) onto the smart contract.
-         * Uses lastIpfsHash global variable.
-         */
-        async function handleRecordOnly() {
-            const recordButton = document.getElementById('recordOnlyButton');
-            
-            if (!lastIpfsHash) {
-                showModal("Missing CID", "Please upload a file to IPFS first (Step 1).");
-                return;
-            }
-            
-            recordButton.disabled = true;
-            recordButton.textContent = "2. Recording to Blockchain...";
-            document.getElementById('uploadStatus').textContent = `Status: 2. Recording Maintenance Data CID to Blockchain...`;
-        
-            const accounts = await web3.eth.getAccounts();
-            const senderAccount = accounts[0]; 
-        
-            try {
-                const tx = await contract.methods.addFileHash(lastIpfsHash)
-                    .send({
-                        from: senderAccount
-                    });
-                
-                // Extract fileId (Record ID) from the event log
-                const fileId = tx.events.FileHashRecorded.returnValues.fileId;
-        
-                document.getElementById('uploadStatus').innerHTML = `✅ **SUCCESS!** Maintenance Record CID recorded. (File ID: <span class="font-bold text-green-600">${fileId}</span>) <br>Tx Hash: ${tx.transactionHash.substring(0, 10)}...`;
-                
-                // Clear state after success
-                lastIpfsHash = "";
-                document.getElementById('ipfsHashDisplay').classList.add('hidden');
-        
-            } catch (error) {
-                let errorMessage = "Blockchain recording failed.";
-                
-                if (error.message && error.message.includes("insufficient funds")) {
-                    errorMessage = "Blockchain Recording Failed: Insufficient tBNB balance for gas.";
-                } else if (error.message && (error.message.includes("revert") || error.message.includes("denied") || error.message.includes("Only admin"))) {
-                    // This captures the Checksum/Admin issue
-                    errorMessage = "Blockchain Recording Failed: Transaction reverted. **Possible Admin/Permission issue (Checksum Mismatch)** or contract logic error.";
-                } else if (error.message && error.message.includes("User denied transaction signature")) {
-                    errorMessage = "Blockchain Recording Failed: Transaction was manually rejected by the user.";
-                } else {
-                    errorMessage = `Blockchain Recording Failed: ${error.message.substring(0, 100)}...`;
-                }
-        
-                document.getElementById('uploadStatus').textContent = `❌ ${errorMessage}`;
-                console.error("Blockchain transaction error:", error);
-            } finally {
-                recordButton.disabled = false;
-                recordButton.textContent = "2. Record CID on Blockchain";
-                updateStatus(); // Re-check status to potentially disable/enable buttons based on new state
-            }
-        }
-
-        /**
-         * Replaces alert() with a custom modal for better UX.
-         * Note: This is a placeholder since the full HTML/CSS for a modal is large.
-         * In a real app, this would trigger a visible modal UI component.
-         */
-        function showModal(title, message) {
-            console.warn(`${title}: ${message}`);
-            // In a single-file application, we use console.warn as a fallback 
-            // since building a custom modal UI in this context is complex.
-        }
-        
-        /**
-         * Main function to retrieve the record, fetch data from IPFS, and visualize it.
-         */
-        async function viewRecordAndAnalyze() {
-            if (!web3 || !contract) return showModal("Connection Error", "Please connect to MetaMask and ensure the BNB Testnet is selected.");
-        
-            const fileId = document.getElementById('recordIdInput').value;
-            const viewButton = document.getElementById('viewButton');
-            const statusDiv = document.getElementById('viewStatus');
-            
-            if (!fileId || isNaN(fileId) || fileId <= 0) {
-                statusDiv.textContent = "Please enter a valid Maintenance Record ID (e.g., 1).";
-                return;
-            }
-        
-            viewButton.disabled = true;
-            viewButton.textContent = "Searching...";
-            statusDiv.textContent = `1. Querying Blockchain for Maintenance Record ID ${fileId}...`;
-            
-            try {
-                // 1. Retrieve CID from Blockchain
-                const ipfsHash = await contract.methods.getFileHash(fileId).call();
-                
-                if (ipfsHash.length === 0 || ipfsHash === '0x') {
-                    throw new Error(`Maintenance Record ID ${fileId} not found on the blockchain. The record may not exist or the ID is invalid.`);
-                }
-        
-                statusDiv.textContent = `2. CID Found: ${ipfsHash.substring(0, 10)}... Fetching data from IPFS Gateway...`;
-        
-                // 2. Fetch CSV data from IPFS Gateway
-                const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-                
-                const response = await fetch(gatewayUrl); 
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch CSV data from IPFS! HTTP Status: ${response.status}`);
-                }
-        
-                const csvText = await response.text();
-                
-                // --- CRITICAL DEBUGGING LOG ---
-                console.log("--- RAW DATA RETRIEVED FROM IPFS GATEWAY ---");
-                console.log(csvText.substring(0, 500) + (csvText.length > 500 ? '...' : ''));
-                console.log("-------------------------------------------");
-                // ------------------------------
-                
-                if (csvText.length === 0) {
-                     throw new Error("Retrieved data is empty. Check the file content on Pinata and the gateway status.");
-                }
-                
-                // 3. Parse CSV and extract data for table/chart
-                const dataForChart = csvToHtmlTable(csvText);
-                
-                // 4. Render Chart
-                renderResidualValueChart(dataForChart);
-        
-                statusDiv.innerHTML = `✅ **SUCCESS!** Data retrieved and analyzed. CID: <a href="${gatewayUrl}" target="_blank" class="text-blue-600 underline">${ipfsHash}</a>`;
-        
-            } catch (error) {
-                document.getElementById('dataTable').innerHTML = `<p class="p-4 text-red-500">Error: Failed to retrieve or process data.</p>`;
-                statusDiv.textContent = `❌ Error: ${error.message}`;
-                console.error("View/Analyze Error:", error);
-            } finally {
-                viewButton.disabled = false;
-                viewButton.textContent = "Retrieve Record and Start Analysis";
-            }
-        }
-        
-        
-        // =========================================================================
-        // Web3 and Wallet Connection
-        // =========================================================================
-        
-        /**
-         * Initializes Web3 and connects to MetaMask.
-         */
-        async function initWeb3() {
-            if (window.ethereum) {
-                web3 = new Web3(window.ethereum);
-                try {
-                    await window.ethereum.request({ method: 'eth_requestAccounts' });
-                    contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-                    updateStatus();
-                    
-                    window.ethereum.on('accountsChanged', updateStatus);
-                    window.ethereum.on('chainChanged', () => { window.location.reload(); });
-        
-                } catch (error) {
-                    console.error("MetaMask connection failed:", error);
-                    document.getElementById('accountStatus').textContent = "Wallet Status: Connection Failed (Check MetaMask)";
-                }
-            } else {
-                document.getElementById('accountStatus').textContent = "Wallet Status: Please install MetaMask!";
-            }
-        }
-        
-        /**
-         * Updates the wallet connection status and checks if the connected user is Admin.
-         */
-        async function updateStatus() {
-            if (!web3 || !contract) return;
-        
-            const accounts = await web3.eth.getAccounts();
-            const selectedAccount = accounts[0];
-            const networkId = await web3.eth.net.getId();
-            
-            // Check for BNB Testnet (ID 97)
-            if (networkId.toString() !== '97') {
-                    document.getElementById('networkStatus').innerHTML = `Network ID: <span class="text-red-500 font-bold">ERROR: Connect to BNB Testnet (ID 97)</span>`;
-            } else {
-                document.getElementById('networkStatus').textContent = `Network ID: 97 (BNB Testnet)`;
-            }
-            
-            // Admin Status Check
-            let adminStatus = "Checking Admin status...";
-            let isAdminUser = false;
-            
-            if (selectedAccount) {
-                try {
-                    // Check if the connected account is an Admin (uses the new mapping function)
-                    isAdminUser = await contract.methods.isAdmin(selectedAccount).call();
-                    if (isAdminUser) {
-                        adminStatus = '<span class="text-green-600 font-bold">✅ Admin (Permission Granted)</span>';
-                    } else {
-                        adminStatus = '<span class="text-red-600 font-bold">❌ Not Admin (Transaction will fail)</span>';
-                    }
-                } catch(error) {
-                    console.error("Admin check failed (likely Invalid Contract Address):", error);
-                    adminStatus = '<span class="text-red-600 font-bold">❌ Admin Check Failed (Invalid Contract Address?)</span>';
-                }
-            }
-        
-        
-            if (selectedAccount) {
-                const balanceWei = await web3.eth.getBalance(selectedAccount);
-                const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-                
-                document.getElementById('accountStatus').innerHTML = `Account (Connected): ${selectedAccount} <br>Admin Status: ${adminStatus}`;
-                document.getElementById('balanceStatus').textContent = `Balance: ${parseFloat(balanceEth).toFixed(4)} tBNB`;
-                
-                // Only enable IPFS upload button if there is an account
-                document.getElementById('ipfsUploadButton').disabled = !selectedAccount;
-                
-                // If there's a pending CID, enable the record button if they are an admin.
-                if (lastIpfsHash && isAdminUser) {
-                     document.getElementById('recordOnlyButton').disabled = false;
-                     document.getElementById('recordOnlyButton').textContent = "2. Record CID on Blockchain (Ready)";
-                }
-        
-            } else {
-                document.getElementById('accountStatus').textContent = "Wallet Status: Account not selected.";
-                document.getElementById('ipfsUploadButton').disabled = true;
-                document.getElementById('recordOnlyButton').disabled = true;
-            }
-        }
-        
-        
-        /**
-         * Uploads the file to IPFS via Pinata service.
-         * @param {File} file - The file to upload.
-         * @param {string} apiKey - Pinata API Key.
-         * @param {string} apiSecret - Pinata Secret Key.
-         * @returns {Promise<string>} The IPFS Content Identifier (CID).
-         */
-        async function uploadToIPFS(file, apiKey, apiSecret) {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const pinataMetadata = JSON.stringify({ name: file.name });
-            formData.append('pinataMetadata', pinataMetadata);
-        
-            try {
-                const response = await fetch(PINATA_URL, {
-                    method: 'POST',
-                    headers: {
-                        'pinata_api_key': apiKey,
-                        'pinata_secret_api_key': apiSecret
-                    },
-                    body: formData,
-                });
-        
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error('Pinata API Error: ' + response.status + ' - ' + errorText.substring(0, 100) + '...');
-                }
-                
-                const json = await response.json();
-                return json.IpfsHash; // Return the CID
-                
-            } catch (error) {
-                console.error("IPFS Upload Error:", error);
-                throw new Error("Failed to upload file to IPFS: Check Pinata API Keys and permissions.");
-            }
-        }
-        
-        /**
-         * Parses CSV text into an HTML table and extracts data for charting.
-         * @param {string} csvText - The raw CSV content.
-         * @returns {Array<{date: string, value: number}>} Data points for the chart.
-         */
-        function csvToHtmlTable(csvText) {
-            if (!csvText || typeof csvText !== 'string' || csvText.trim().length === 0) {
-                console.error("CSV Parsing Error: Input text is not a valid string or is empty.");
-                throw new Error("CSV Parsing failed: Retrieved data is empty or malformed.");
-            }
-            
-            const lines = csvText.trim().split(/\r?\n/);
-            if (lines.length === 0 || lines.every(line => line.trim() === '')) return '<tr><td colspan="100%">No data found.</td></tr>';
-        
-            // 1. Create a responsive wrapper for horizontal scrolling
-            const tableWrapper = document.createElement('div');
-            tableWrapper.className = "overflow-x-auto"; // Key class for horizontal scrolling
-        
-            const table = document.createElement('table');
-            table.className = "min-w-full divide-y divide-gray-200 border border-gray-300";
-            const thead = table.createTHead();
-            const tbody = table.createTBody();
-            
-            tableWrapper.appendChild(table); // Append table to the new wrapper
-        
-            // 2. Parse Headers (First Line) and find required indices using the new parser
-            const headers = parseCSVLine(lines[0]);
-            const THEAD_ROW = thead.insertRow();
-            THEAD_ROW.className = "bg-gray-50";
-        
-            let dateIndex = -1;
-            // --- MODIFICATION 1: Change target index from MR to RV ---
-            let rvIndex = -1; // Index for Residual Value (RV) or similar column
-            const headersCleaned = [];
-        
-            headers.forEach((header, index) => {
-                const headerValue = (header || '').trim();
-                headersCleaned.push(headerValue);
-                
-                // Find required column indices (case-insensitive and partial match)
-                const lowerHeader = headerValue.toLowerCase();
-                if (lowerHeader.includes('date') || lowerHeader.includes('inspection')) {
-                    dateIndex = index;
-                }
-                // --- MODIFICATION 2: Search for 'RV' or 'Residual Value' ---
-                if (lowerHeader.includes('rv') || lowerHeader.includes('residual')) {
-                    rvIndex = index;
-                }
-        
-                const th = document.createElement('th');
-                th.textContent = headerValue; 
-                th.className = "px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[120px]"; // Added min-width for better column sizing
-                THEAD_ROW.appendChild(th);
-            });
-        
-            // --- MODIFICATION 3: Check for rvIndex instead of mrIndex ---
-            if (dateIndex === -1 || rvIndex === -1) {
-                console.error(`Critical: Could not find 'Date' (Index: ${dateIndex}) or 'RV' (Index: ${rvIndex}) columns in CSV header.`);
-            }
-        
-            // 3. Parse Body and Extract Chart Data using the new parser
-            const dataForChart = [];
-            const expectedColumnCount = headersCleaned.length;
-        
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (line === '') continue;
-                
-                // Use the robust parser
-                const cells = parseCSVLine(line);
-                const row = tbody.insertRow();
-                row.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
-        
-                let dateValue = null;
-                // --- MODIFICATION 4: Change variable name to rvValue ---
-                let rvValue = null;
-                
-                // Iterate up to the expected number of columns to prevent undefined access
-                for (let j = 0; j < expectedColumnCount; j++) {
-                    // Get cell content, use empty string if undefined (out of bounds due to missing trailing fields)
-                    const cellValue = cells[j] !== undefined ? cells[j] : '';
-                    
-                    // Populate HTML Table
-                    const td = row.insertCell();
-                    td.textContent = cellValue;
-                    td.className = "px-4 py-2 whitespace-nowrap text-sm text-gray-500 min-w-[120px]"; // Added min-width to cells
-                    
-                    // Extract chart data using fixed indices
-                    if (j === dateIndex) { 
-                        dateValue = cellValue;
-                    }
-                    // --- MODIFICATION 5: Use rvIndex and assign to rvValue ---
-                    if (j === rvIndex) { 
-                        // Enhanced cleaning for numerical values, removing currency symbols and non-digit/non-dot characters
-                        rvValue = parseFloat(cellValue.replace(/[^0-9.]/g, ''));
-                    }
-                }
-                
-                // --- MODIFICATION 6: Push rvValue to chart data ---
-                if (dateValue && !isNaN(rvValue)) {
-                    dataForChart.push({ date: dateValue, value: rvValue });
-                }
-            }
-        
-            document.getElementById('dataTable').innerHTML = '';
-            // Append the entire wrapper (which contains the table) to the dataTable container
-            document.getElementById('dataTable').appendChild(tableWrapper);
-            
-            return dataForChart;
-        }
-        
-        /**
-         * Renders the Chart.js line graph for residual value trend.
-         * @param {Array<{date: string, value: number}>} data - The data points.
-         */
-        function renderResidualValueChart(data) {
-            const ctx = document.getElementById('residualValueChart').getContext('2d');
-        
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
-            
-            // Sort data by date before charting (assuming YYYY-MM-DD format)
-            data.sort((a, b) => new Date(a.date) - new Date(b.date));
-        
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(item => item.date),
-                    datasets: [{
-                        // --- MODIFICATION 7: Change Label Text to RV ---
-                        label: 'RV (Residual Value) (USD) Trend', 
-                        data: data.map(item => item.value),
-                        // Using a blue color for value
-                        backgroundColor: 'rgba(59, 130, 246, 0.5)', 
-                        borderColor: 'rgb(59, 130, 246)',
-                        tension: 0.3,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'top' },
-                        // --- MODIFICATION 8: Change Title Text to RV ---
-                        title: { display: true, text: 'Residual Value (RV) Trend Over Time' } 
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: false, 
-                            // --- MODIFICATION 9: Change Y-Axis Title to RV ---
-                            title: { display: true, text: 'Residual Value (RV) (USD)' }, 
-                            ticks: {
-                                callback: function(value) {
-                                    // Format y-axis ticks as currency
-                                    return '$' + value.toLocaleString();
-                                }
-                            }
-                        },
-                        x: { title: { display: true, text: 'Date of Maintenance/Inspection' } }
-                    }
-                }
-            });
-        }
-        
-        
-        // =========================================================================
-        // Initialization
-        // =========================================================================
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            initWeb3();
-            document.getElementById('ipfsUploadButton').disabled = true; // Disable until MetaMask is connected
-            document.getElementById('recordOnlyButton').disabled = true;
-            setActiveTab('upload'); 
-        });
     </script>
 </body>
 </html>
