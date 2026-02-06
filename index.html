@@ -140,8 +140,8 @@
                         
                         <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
                             <p class="font-semibold mb-1">💡 검색 방법</p>
-                            <p>• 등록번호: N300SH, HL7737 등</p>
-                            <p>• Record ID: 0, 1, 2 등 숫자</p>
+                            <p>• 등록번호: N737CL, HL7737 등</p>
+                            <p>• Record ID: 1, 2, 3 등 (1부터 시작)</p>
                         </div>
                     </div>
                 </section>
@@ -477,25 +477,40 @@
                 if (!isNaN(query)) {
                     // Direct ID search
                     foundId = query;
-                    metadata = await contract.methods.getFileHash(query).call();
+                    try {
+                        metadata = await contract.methods.getFileHash(query).call();
+                        if (!metadata || metadata === '') {
+                            throw new Error(`Record ID ${query}가 존재하지 않습니다.`);
+                        }
+                    } catch (e) {
+                        throw new Error(`Record ID ${query}를 찾을 수 없습니다. ID는 1부터 시작합니다.`);
+                    }
                 } else {
-                    // Search by tail number using events
-                    const events = await contract.getPastEvents('FileHashRecorded', {
-                        fromBlock: 0,
-                        toBlock: 'latest'
-                    });
-
+                    // Search by tail number - scan blockchain records
                     const queryUpper = query.toUpperCase();
-                    for (let event of events.reverse()) { // Search from latest
-                        const hash = event.returnValues.ipfsHash;
-                        if (hash.startsWith(queryUpper + '|')) {
-                            foundId = event.returnValues.fileId;
-                            metadata = hash;
+                    let searchId = 1; // Smart contracts usually start from 1
+                    let found = false;
+                    
+                    // Try sequential search (more reliable than events)
+                    while (searchId < 1000) { // Safety limit
+                        try {
+                            const hash = await contract.methods.fileHashes(searchId).call();
+                            if (!hash || hash === '') break; // No more records
+                            
+                            if (hash.startsWith(queryUpper + '|')) {
+                                foundId = searchId;
+                                metadata = hash;
+                                found = true;
+                                break;
+                            }
+                            searchId++;
+                        } catch (e) {
+                            // Record doesn't exist, stop searching
                             break;
                         }
                     }
 
-                    if (!foundId) {
+                    if (!found) {
                         throw new Error('해당 등록번호를 찾을 수 없습니다.');
                     }
                 }
@@ -807,14 +822,26 @@
 
         async function updateTotalRecords() {
             try {
-                const events = await contract.getPastEvents('FileHashRecorded', {
-                    fromBlock: 0,
-                    toBlock: 'latest'
-                });
-                document.getElementById('totalRecords').textContent = events.length;
+                let count = 0;
+                let id = 1; // Start from 1
+                
+                // Sequential scan
+                while (id < 10000) { // Safety limit
+                    try {
+                        const hash = await contract.methods.fileHashes(id).call();
+                        if (!hash || hash === '') break;
+                        count++;
+                        id++;
+                    } catch (e) {
+                        // No more records
+                        break;
+                    }
+                }
+                
+                document.getElementById('totalRecords').textContent = count;
             } catch (error) {
                 console.error('Error fetching total records:', error);
-                document.getElementById('totalRecords').textContent = 'Error';
+                document.getElementById('totalRecords').textContent = '0';
             }
         }
 
