@@ -41,23 +41,34 @@
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Status Message -->
         <div id="statusMessage" class="hidden mb-6 p-4 rounded-lg text-sm font-medium shadow-sm fade-in border"></div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Left Column: Operations -->
+            <!-- Left Column -->
             <div class="lg:col-span-4 space-y-6">
                 <!-- Upload Section -->
-                <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden relative">
+                <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
                     <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        Upload Records
+                        Upload & Secure
                     </h2>
                     
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Aircraft Tail Number</label>
-                            <input type="text" id="aircraftId" placeholder="e.g., HL8201" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Aircraft Model (FAA Class)</label>
+                            <select id="aircraftTypeSelect" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none">
+                                <option value="B787">Boeing 787 ($190M)</option>
+                                <option value="B737">Boeing 737 ($80M)</option>
+                                <option value="A320">Airbus A320 ($77M)</option>
+                                <option value="B777">Boeing 777 ($140M)</option>
+                                <option value="A330">Airbus A330 ($175M)</option>
+                                <option value="B767">Boeing 767 ($150M)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Registration (Tail Number)</label>
+                            <input type="text" id="aircraftTailNo" placeholder="HL8201" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none">
                         </div>
                         
                         <div>
@@ -68,11 +79,11 @@
 
                         <div class="p-4 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-center" onclick="document.getElementById('maintenanceFile').click()">
                             <input type="file" id="maintenanceFile" accept=".csv" class="hidden">
-                            <p id="fileNameDisplay" class="text-sm text-slate-500">Click to select Maintenance CSV</p>
+                            <p id="fileNameDisplay" class="text-sm text-slate-500">Select Maintenance CSV</p>
                         </div>
 
-                        <button onclick="handleUpload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-200 active:scale-95">
-                            Process & Secure on Chain
+                        <button onclick="handleUpload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg active:scale-95">
+                            Process & Secure Record
                         </button>
                     </div>
                 </section>
@@ -81,52 +92,42 @@
                 <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
                     <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center">
                         <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        On-chain Retrieval
+                        Retrieval Engine
                     </h2>
                     <div class="space-y-3">
                         <div class="flex space-x-2">
-                            <input type="text" id="searchQuery" placeholder="Enter ID or Tail No." class="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
-                            <button onclick="searchSmart()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-bold transition-all shadow-md">Search</button>
+                            <input type="text" id="searchQuery" placeholder="Record ID or Tail No." class="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl outline-none">
+                            <button onclick="searchSmart()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl font-bold transition-all">Search</button>
                         </div>
-                        <div id="searchResultMeta" class="hidden p-4 bg-indigo-50 border border-indigo-100 rounded-xl fade-in"></div>
+                        <div id="searchResultMeta" class="hidden p-4 bg-indigo-50 border border-indigo-100 rounded-xl fade-in text-xs"></div>
                     </div>
                 </section>
             </div>
 
-            <!-- Right Column: Visualization -->
+            <!-- Right Column -->
             <div class="lg:col-span-8 space-y-6">
-                <!-- Welcome/Chart Area -->
                 <div id="dataDashboard" class="hidden space-y-6">
                     <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest">Residual Value (RV) Analysis</h2>
-                            <div class="flex space-x-2">
-                                <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold uppercase">Live Visualization</span>
-                            </div>
-                        </div>
+                        <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Residual Value (RV) Trend</h2>
                         <div class="h-[400px]">
                             <canvas id="rvChart"></canvas>
                         </div>
                     </section>
 
                     <section class="glass-card rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div class="bg-slate-50/50 px-6 py-4 border-b flex justify-between items-center">
-                            <h2 class="text-sm font-bold text-slate-600 uppercase">Audit Ledger</h2>
-                            <button onclick="downloadCSV()" class="text-xs bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-100">Export CSV</button>
+                        <div class="bg-slate-50/50 px-6 py-4 border-b flex justify-between items-center text-sm font-bold text-slate-600">
+                            <span>AUDIT LEDGER</span>
                         </div>
-                        <div class="overflow-x-auto max-h-[400px]" id="tableWrapper">
-                            <!-- Table will be injected here -->
-                        </div>
+                        <div class="overflow-x-auto max-h-[400px]" id="tableWrapper"></div>
                     </section>
                 </div>
 
-                <!-- Empty State -->
                 <div id="emptyState" class="flex flex-col items-center justify-center py-32 text-center bg-white border border-dashed border-slate-300 rounded-3xl">
-                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                        <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-400">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
-                    <h3 class="text-xl font-bold text-slate-800">Awaiting Record Input</h3>
-                    <p class="text-slate-500 max-w-sm mx-auto mt-2">Connect your wallet and upload an aircraft maintenance log to generate immutable valuation data.</p>
+                    <h3 class="text-lg font-bold text-slate-800">No Asset Selected</h3>
+                    <p class="text-slate-500 text-sm mt-1">Upload a record or search for an existing tail number.</p>
                 </div>
             </div>
         </div>
@@ -136,26 +137,25 @@
     <div id="loadingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
         <div class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-xs w-full">
             <div class="loading-spinner mb-4"></div>
-            <h3 id="loadingTitle" class="text-lg font-bold text-slate-800">Processing</h3>
-            <p id="loadingMessage" class="text-sm text-slate-500 text-center mt-2">Uploading data to IPFS...</p>
+            <h3 id="loadingTitle" class="text-lg font-bold">Processing</h3>
+            <p id="loadingMessage" class="text-sm text-slate-500 text-center mt-2">Connecting to network...</p>
         </div>
     </div>
 
     <script>
-        // --- Setup ---
         const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442";
         const CONTRACT_ABI = [{"inputs":[{"internalType":"address[]","name":"_admins","type":"address[]"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"fileId","type":"uint256"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"}],"name":"FileHashRecorded","type":"event"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"fileHashes","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true},{"inputs":[{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"addFileHash","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_fileId","type":"uint256"}],"name":"getFileHash","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true}];
         
-        const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
         const AIRCRAFT_PARAMS = {
-            "B787": { initialPrice: 190000000, permDepr: 1185.36, varDepr: 2406.64, annualEconRate: 0.04 },
-            "B737": { initialPrice: 80000000, permDepr: 715.61, varDepr: 1452.90, annualEconRate: 0.04 },
-            "DEFAULT": { initialPrice: 80000000, permDepr: 700.00, varDepr: 1400.00, annualEconRate: 0.04 }
+            "B787": { initialPrice: 190000000, permDepr: 1185.36, varDepr: 2406.64, econRate: 0.04 },
+            "B737": { initialPrice: 80000000, permDepr: 715.61, varDepr: 1452.90, econRate: 0.04 },
+            "A320": { initialPrice: 77000000, permDepr: 796.79, varDepr: 1617.72, econRate: 0.04 },
+            "B777": { initialPrice: 140000000, permDepr: 1568.66, varDepr: 3184.85, econRate: 0.04 },
+            "A330": { initialPrice: 175000000, permDepr: 1291.46, varDepr: 2622.05, econRate: 0.04 },
+            "B767": { initialPrice: 150000000, permDepr: 1101.38, varDepr: 2236.13, econRate: 0.04 }
         };
 
-        let web3, contract, chartInstance, currentProcessedData = [];
-
-        // --- Core Functions ---
+        let web3, contract, chartInstance;
 
         async function initWeb3() {
             if (window.ethereum) {
@@ -165,196 +165,157 @@
                     contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
                     document.getElementById('walletAddress').textContent = accounts[0].substring(0, 10) + "...";
                     document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-green-500";
-                    notify("success", "MetaMask connected successfully.");
-                } catch (e) {
-                    notify("error", "User denied wallet connection.");
-                }
-            } else {
-                notify("error", "MetaMask not found. Please install extension.");
+                } catch (e) { notify("error", "Wallet connection failed."); }
             }
         }
 
         async function handleUpload() {
-            const tailNo = document.getElementById('aircraftId').value.trim();
+            const tailNo = document.getElementById('aircraftTailNo').value.trim();
+            const type = document.getElementById('aircraftTypeSelect').value;
             const fileInput = document.getElementById('maintenanceFile');
             const key = document.getElementById('pinataApiKey').value;
             const secret = document.getElementById('pinataApiSecret').value;
 
-            if (!tailNo || !fileInput.files[0] || !key || !secret) {
-                return notify("error", "Please fill in all fields and select a file.");
-            }
+            if (!tailNo || !fileInput.files[0] || !key || !secret) return notify("error", "Missing input fields.");
 
-            const rawFile = fileInput.files[0];
             const reader = new FileReader();
-            
             reader.onload = async (e) => {
                 try {
-                    showLoading("Compliance Engine", "Uploading Raw Record to IPFS...");
-                    const rawCid = await uploadToIPFS(rawFile, key, secret);
+                    showLoading("IPFS", "Uploading raw records...");
+                    const rawCid = await uploadToPinata(fileInput.files[0], key, secret);
                     
-                    showLoading("Asset Valuation", "Calculating Residual Value...");
-                    const modelKey = Object.keys(AIRCRAFT_PARAMS).find(k => tailNo.toUpperCase().includes(k)) || "DEFAULT";
-                    const params = AIRCRAFT_PARAMS[modelKey];
-                    const processedData = calculateValuation(e.target.result, params);
+                    showLoading("Engine", `Processing ${type} valuation...`);
+                    const params = AIRCRAFT_PARAMS[type];
+                    const processedData = calculateRV(e.target.result, params);
                     
-                    const csvString = Papa.unparse(processedData);
-                    const blob = new Blob([csvString], { type: 'text/csv' });
-                    const pFile = new File([blob], `PROCESSED_${tailNo}.csv`, { type: 'text/csv' });
+                    const csvStr = Papa.unparse(processedData);
+                    const processedCid = await uploadToPinata(new Blob([csvStr], { type: 'text/csv' }), key, secret);
                     
-                    showLoading("IPFS Sync", "Uploading Processed Audit to IPFS...");
-                    const processedCid = await uploadToIPFS(pFile, key, secret);
-                    
-                    showLoading("Blockchain Lock", "Securing Audit Trail on Chain...");
-                    const metadata = `${tailNo.toUpperCase()}|${rawCid}|${processedCid}`;
+                    showLoading("Blockchain", "Finalizing on-chain record...");
+                    const metaStr = `${tailNo.toUpperCase()}|${rawCid}|${processedCid}|${type}`;
                     const accounts = await web3.eth.getAccounts();
-                    const receipt = await contract.methods.addFileHash(metadata).send({ from: accounts[0] });
+                    await contract.methods.addFileHash(metaStr).send({ from: accounts[0] });
                     
-                    const newId = receipt.events.FileHashRecorded.returnValues.fileId;
                     hideLoading();
-                    notify("success", `Record # ${newId} secured for ${tailNo}.`);
+                    notify("success", `Asset ${tailNo} secured successfully.`);
                     renderUI(processedData);
-                } catch (err) {
-                    hideLoading();
-                    notify("error", err.message);
-                }
+                } catch (err) { hideLoading(); notify("error", err.message); }
             };
-            reader.readAsText(rawFile);
+            reader.readAsText(fileInput.files[0]);
         }
 
         async function searchSmart() {
-            const query = document.getElementById('searchQuery').value.trim();
-            const metaDiv = document.getElementById('searchResultMeta');
-            if (!query) return;
+            const q = document.getElementById('searchQuery').value.trim();
+            if (!q) return;
 
             try {
-                showLoading("Search Engine", `Searching for "${query}" on blockchain...`);
+                showLoading("Audit Scan", "Searching blockchain ledger...");
                 let metadata = "";
-                let foundId = query;
-
-                // Scenario A: Tail Number Search (Scans Blockchain)
-                if (isNaN(query)) {
-                    let total = 0;
-                    while (true) {
-                        try { await contract.methods.fileHashes(total).call(); total++; } catch(e) { break; }
-                    }
-                    
+                
+                if (isNaN(q)) { // Search by Tail Number (Scan)
+                    let totalCount = 0;
+                    // Binary scan or limit scan to prevent infinite loop
+                    const MAX_RECORDS_TO_SCAN = 1000; 
                     let found = false;
-                    for (let i = total - 1; i >= 0; i--) {
-                        const raw = await contract.methods.fileHashes(i).call();
-                        if (raw.startsWith(query.toUpperCase() + "|")) {
-                            metadata = raw;
-                            foundId = i;
-                            found = true;
-                            break;
-                        }
+
+                    // 역순으로 검색하여 최신 데이터를 먼저 찾음 (무한루프 방지)
+                    for (let i = MAX_RECORDS_TO_SCAN; i >= 0; i--) {
+                        try {
+                            const raw = await contract.methods.fileHashes(i).call();
+                            if (raw.startsWith(q.toUpperCase() + "|")) {
+                                metadata = raw;
+                                found = true;
+                                break;
+                            }
+                        } catch(e) { /* skip non-existent */ }
                     }
-                    if (!found) throw new Error("Tail Number not found on chain.");
-                } 
-                // Scenario B: Direct ID Search
-                else {
-                    metadata = await contract.methods.getFileHash(query).call();
+                    if (!found) throw new Error("Tail Number not found.");
+                } else {
+                    metadata = await contract.methods.getFileHash(q).call();
                 }
 
-                const [tail, rawCid, processedCid] = metadata.split('|');
-                
+                const [tail, rawCid, pCid, type] = metadata.split('|');
+                const metaDiv = document.getElementById('searchResultMeta');
                 metaDiv.classList.remove('hidden');
                 metaDiv.innerHTML = `
-                    <div class="flex justify-between items-center mb-3">
-                        <span class="font-bold text-indigo-900">✈️ Aircraft: ${tail}</span>
-                        <span class="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono">Record ID: ${foundId}</span>
-                    </div>
-                    <div class="space-y-1.5">
-                        <a href="https://gateway.pinata.cloud/ipfs/${rawCid}" target="_blank" class="block text-xs text-indigo-600 hover:underline">📄 Source Maintenance Record (Raw)</a>
-                        <a href="https://gateway.pinata.cloud/ipfs/${processedCid}" target="_blank" class="block text-xs text-indigo-600 hover:underline">📊 Blockchain Valuation Audit (Processed)</a>
-                    </div>
+                    <p class="font-bold text-indigo-900 mb-1">✈️ ${tail} (${type || 'Unknown Model'})</p>
+                    <a href="https://gateway.pinata.cloud/ipfs/${rawCid}" target="_blank" class="block text-indigo-500 hover:underline">View Raw Logs</a>
+                    <a href="https://gateway.pinata.cloud/ipfs/${pCid}" target="_blank" class="block text-indigo-500 hover:underline">View Valuation Audit</a>
                 `;
 
-                const resp = await fetch(`https://gateway.pinata.cloud/ipfs/${processedCid}`);
+                const resp = await fetch(`https://gateway.pinata.cloud/ipfs/${pCid}`);
                 const csv = await resp.text();
                 const data = Papa.parse(csv.trim(), { header: true }).data;
                 renderUI(data);
                 hideLoading();
-                notify("success", `Data retrieved for ${tail}.`);
-            } catch (e) {
-                hideLoading();
-                notify("error", e.message);
-                metaDiv.classList.add('hidden');
-            }
+            } catch (e) { hideLoading(); notify("error", e.message); }
         }
 
-        // --- Helper Logic ---
-
-        function calculateValuation(csv, params) {
-            const results = Papa.parse(csv.trim(), { header: true }).data;
+        function calculateRV(csv, params) {
+            const rows = Papa.parse(csv.trim(), { header: true }).data;
             let currentRv = params.initialPrice;
-            let mrBalance = 0;
+            let mrAccrual = 0;
             let lastTis = 0;
 
-            return results.map(row => {
-                const tis = parseFloat(row['Airframe TIS (hrs)']) || 0;
-                const work = row['Work Type/Note'] || "";
-                const deltaTis = tis - lastTis;
+            return rows.map(r => {
+                const tis = parseFloat(r['Airframe TIS (hrs)']) || 0;
+                const delta = tis - lastTis;
+                const work = (r['Work Type/Note'] || "").toLowerCase();
 
-                const depr = (deltaTis * params.permDepr) + ((params.initialPrice * params.annualEconRate) * (deltaTis / 2000));
+                // Depr: Permanent + Economic (Annual 4% spread over 2000hrs)
+                const depr = (delta * params.permDepr) + ((params.initialPrice * params.econRate) * (delta / 2000));
                 currentRv -= depr;
-                mrBalance += (deltaTis * params.varDepr);
+                mrAccrual += (delta * params.varDepr);
 
-                let remarks = "";
-                if (work.includes('Check')) {
-                    currentRv += mrBalance;
-                    remarks = `Value recaptured (+$${mrBalance.toLocaleString()})`;
-                    mrBalance = 0;
+                let event = "";
+                if (work.includes('check')) {
+                    currentRv += mrAccrual;
+                    event = `Recaptured $${Math.round(mrAccrual).toLocaleString()}`;
+                    mrAccrual = 0;
                 }
                 lastTis = tis;
                 return {
-                    Date: row['Date'],
-                    TIS: tis,
-                    WorkType: work,
-                    RV_USD: Math.round(currentRv),
-                    MR_USD: Math.round(mrBalance),
-                    Remarks: remarks
+                    Date: r['Date'], TIS: tis, Work: r['Work Type/Note'],
+                    RV: Math.round(currentRv), MR: Math.round(mrAccrual), Remarks: event
                 };
             });
         }
 
-        async function uploadToIPFS(file, key, secret) {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(PINATA_URL, {
+        async function uploadToPinata(blob, key, secret) {
+            const fd = new FormData();
+            fd.append('file', blob);
+            const res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
                 method: 'POST',
                 headers: { 'pinata_api_key': key, 'pinata_secret_api_key': secret },
-                body: formData
+                body: fd
             });
-            if (!res.ok) throw new Error("Pinata API error.");
-            const j = await res.json();
-            return j.IpfsHash;
+            if (!res.ok) throw new Error("Pinata error");
+            const data = await res.json();
+            return data.IpfsHash;
         }
 
         function renderUI(data) {
-            currentProcessedData = data;
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('dataDashboard').classList.remove('hidden');
 
-            // Table
-            let html = `<table class="min-w-full text-xs"><thead class="bg-slate-50 border-b sticky top-0 z-10"><tr>
-                <th class="p-4 text-left font-bold text-slate-500 uppercase tracking-tighter">Date</th>
-                <th class="p-4 text-left font-bold text-slate-500 uppercase tracking-tighter">TIS</th>
-                <th class="p-4 text-left font-bold text-blue-600 uppercase tracking-tighter">Residual Value (USD)</th>
-                <th class="p-4 text-left font-bold text-red-500 uppercase tracking-tighter">MR Balance</th>
-                <th class="p-4 text-left font-bold text-slate-500 uppercase tracking-tighter">Event Remarks</th>
+            let html = `<table class="min-w-full text-[11px]"><thead class="bg-slate-50 border-b"><tr>
+                <th class="p-4 text-left font-bold text-slate-500 uppercase">Date</th>
+                <th class="p-4 text-left font-bold text-slate-500 uppercase">TIS</th>
+                <th class="p-4 text-left font-bold text-blue-600 uppercase">RV (USD)</th>
+                <th class="p-4 text-left font-bold text-red-400 uppercase">MR Fund</th>
+                <th class="p-4 text-left font-bold text-slate-500 uppercase">Events</th>
             </tr></thead><tbody class="divide-y divide-slate-100">`;
             
             data.forEach(r => {
-                html += `<tr class="hover:bg-slate-50/80 transition-colors">
-                    <td class="p-4">${r.Date}</td><td class="p-4 font-mono">${r.TIS}</td>
-                    <td class="p-4 font-bold">$${parseInt(r.RV_USD).toLocaleString()}</td>
-                    <td class="p-4 text-slate-500">$${parseInt(r.MR_USD).toLocaleString()}</td>
-                    <td class="p-4 italic text-green-600 font-medium">${r.Remarks || '-'}</td>
+                html += `<tr class="hover:bg-slate-50">
+                    <td class="p-4">${r.Date}</td><td class="p-4">${r.TIS}</td>
+                    <td class="p-4 font-bold text-blue-700">$${parseInt(r.RV).toLocaleString()}</td>
+                    <td class="p-4 text-slate-400">$${parseInt(r.MR).toLocaleString()}</td>
+                    <td class="p-4 font-medium text-emerald-600">${r.Remarks || '-'}</td>
                 </tr>`;
             });
             document.getElementById('tableWrapper').innerHTML = html + "</tbody></table>";
 
-            // Chart
             const ctx = document.getElementById('rvChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(ctx, {
@@ -362,50 +323,42 @@
                 data: {
                     labels: data.map(d => d.Date),
                     datasets: [{
-                        label: 'Aircraft Value (USD)',
-                        data: data.map(d => d.RV_USD),
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        fill: true, tension: 0.4, borderWidth: 3, pointRadius: 2
+                        data: data.map(d => d.RV),
+                        borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                        fill: true, tension: 0.3, borderWidth: 3, pointRadius: 0
                     }]
                 },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
                     plugins: { legend: { display: false } },
-                    scales: {
-                        y: { ticks: { callback: v => '$' + v.toLocaleString() }, grid: { borderDash: [5, 5] } },
+                    scales: { 
+                        y: { ticks: { callback: v => '$' + (v/1000000).toFixed(1) + 'M' } },
                         x: { grid: { display: false } }
                     }
                 }
             });
         }
 
-        function notify(type, message) {
+        function notify(type, msg) {
             const el = document.getElementById('statusMessage');
-            const colors = {
-                'success': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                'error': 'bg-rose-50 text-rose-800 border-rose-200',
-                'info': 'bg-sky-50 text-sky-800 border-sky-200'
-            };
-            el.className = `mb-6 p-4 rounded-xl text-sm font-semibold shadow-sm fade-in border ${colors[type]}`;
-            el.textContent = message;
+            el.className = `mb-6 p-4 rounded-xl text-sm font-bold fade-in border ${type==='success'?'bg-emerald-50 text-emerald-800 border-emerald-100':'bg-rose-50 text-rose-800 border-rose-100'}`;
+            el.textContent = msg;
             el.classList.remove('hidden');
-            if (type !== 'error') setTimeout(() => el.classList.add('hidden'), 5000);
         }
 
-        function showLoading(title, msg) {
-            document.getElementById('loadingTitle').textContent = title;
-            document.getElementById('loadingMessage').textContent = msg;
+        function showLoading(t, m) {
+            document.getElementById('loadingTitle').textContent = t;
+            document.getElementById('loadingMessage').textContent = m;
             document.getElementById('loadingModal').classList.remove('hidden');
         }
 
         function hideLoading() { document.getElementById('loadingModal').classList.add('hidden'); }
 
         document.getElementById('maintenanceFile').addEventListener('change', e => {
-            document.getElementById('fileNameDisplay').textContent = e.target.files[0] ? e.target.files[0].name : "Select Maintenance CSV";
+            document.getElementById('fileNameDisplay').textContent = e.target.files[0].name;
         });
 
-        document.addEventListener('DOMContentLoaded', initWeb3);
+        window.onload = initWeb3;
     </script>
 </body>
 </html>
