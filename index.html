@@ -3,147 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AeroValue: Blockchain Aircraft RV Manager</title>
+    <title>AeroValue | Blockchain Aircraft Valuation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/web3@1.8.1/dist/web3.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
-        .overflow-x-auto::-webkit-scrollbar { height: 8px; }
-        .overflow-x-auto::-webkit-scrollbar-thumb { background-color: rgba(107, 114, 128, 0.5); border-radius: 4px; }
-        .contract-address-note { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .tab-active { border-bottom: 3px solid #1e40af; color: #1e40af; font-weight: 700; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans">
-    <nav class="bg-blue-900 text-white p-4 shadow-lg">
+<body class="bg-slate-50 min-h-screen text-slate-900 font-sans">
+
+    <!-- Header -->
+    <header class="bg-blue-900 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold flex items-center">
-                <span class="mr-2">✈️</span> AeroValue DApp
-            </h1>
-            <div id="walletAddress" class="text-sm bg-blue-800 px-3 py-1 rounded-full border border-blue-700 text-blue-100">
-                Wallet not connected
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl font-black tracking-tighter italic">AeroValue</span>
+                <span class="text-[10px] bg-blue-700 px-2 py-0.5 rounded uppercase font-bold">FAA Compliance Mode</span>
+            </div>
+            <div id="walletInfo" class="text-xs font-mono bg-blue-800 px-3 py-1.5 rounded-full border border-blue-700">
+                Wallet: <span id="walletAddress">Connecting...</span>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <main class="container mx-auto py-8 px-4">
-        <!-- Dashboard Header -->
-        <div class="mb-8">
-            <h2 class="text-3xl font-extrabold text-gray-800">Residual Value & Maintenance Records</h2>
-            <p class="text-gray-600 mt-2 text-lg">Calculate aircraft depreciation and record immutable logs on the Binance Smart Chain (BNB Testnet).</p>
-        </div>
+    <main class="container mx-auto p-4 md:p-8 max-w-6xl">
+        <!-- Status Notification -->
+        <div id="statusMessage" class="hidden mb-6 p-4 rounded-lg text-sm font-medium shadow-sm transition-all duration-300"></div>
 
-        <!-- Alert Area -->
-        <div id="statusMessage" class="hidden p-4 rounded-md mb-6 shadow-sm border"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Upload & Configuration -->
+            <div class="lg:col-span-1 space-y-6">
+                <section class="glass-card border rounded-xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        Upload Records
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Aircraft ID (Tail Number)</label>
+                            <input type="text" id="aircraftId" placeholder="e.g. N300SHT" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
 
-        <!-- Configuration Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md border border-gray-100">
-                <h3 class="text-xl font-bold text-gray-700 mb-4 border-b pb-2">Step 1: System Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Pinata API Key</label>
-                        <input type="password" id="pinataApiKey" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter Pinata Key">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Pinata API Key</label>
+                            <input type="password" id="pinataApiKey" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Pinata Secret Key</label>
+                            <input type="password" id="pinataApiSecret" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Maintenance Log (CSV)</label>
+                            <input type="file" id="maintenanceFile" accept=".csv" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                        </div>
+
+                        <button onclick="handleProfessionalUpload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md active:transform active:scale-95">
+                            Process & Record on Chain
+                        </button>
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Pinata Secret Key</label>
-                        <input type="password" id="pinataApiSecret" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter Secret Key">
+                </section>
+
+                <section class="glass-card border rounded-xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        On-chain Search
+                    </h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="searchQuery" placeholder="Enter ID or Tail No." class="flex-1 p-2.5 border rounded-lg text-sm outline-none focus:border-blue-500">
+                        <button onclick="searchSmart()" class="bg-slate-800 hover:bg-black text-white px-4 rounded-lg text-sm font-bold transition-colors">Search</button>
                     </div>
-                </div>
-                <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                    <p class="text-xs text-blue-800">
-                        <strong>FAA Compliance Note:</strong> All RV calculations follow standard economic depreciation models and FAA Part 91/121 maintenance standards.
-                    </p>
-                </div>
+                    <div id="searchResult" class="mt-4 hidden animate-pulse"></div>
+                </section>
             </div>
 
-            <!-- New: Supported Models Guide -->
-            <div class="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-                <h3 class="text-xl font-bold text-gray-700 mb-4 border-b pb-2">Supported Models</h3>
-                <div class="flex flex-wrap gap-2">
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B787-9</span>
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B737 NG</span>
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">A320 Family</span>
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B777</span>
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">A330</span>
-                    <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300">B767</span>
-                </div>
-                <p class="text-[10px] text-gray-500 mt-3 leading-tight italic">
-                    * Filename must include the model name (e.g., "B787_Log.csv") to apply specific depreciation variables.
-                </p>
-            </div>
-        </div>
-
-        <!-- Main Workspace -->
-        <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-            <div class="flex border-b bg-gray-50">
-                <button onclick="setActiveTab('upload')" id="tab-upload" class="px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600">Upload & Calculate</button>
-                <button onclick="setActiveTab('search')" id="tab-search" class="px-6 py-4 font-bold text-gray-500 hover:text-blue-600 transition">On-Chain Search</button>
-            </div>
-
-            <div class="p-8">
-                <!-- Upload Tab -->
-                <div id="content-upload">
-                    <div class="max-w-2xl">
-                        <h4 class="text-lg font-bold text-gray-800 mb-4">Calculate RV & Secure on IPFS</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Aircraft ID (Numeric)</label>
-                                <input type="number" id="fileIdInput" class="w-full p-2 border border-gray-300 rounded focus:border-blue-500" placeholder="e.g. 101">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Maintenance Log (CSV)</label>
-                                <input type="file" id="maintenanceFile" accept=".csv" class="w-full p-2 border border-gray-300 rounded bg-gray-50">
-                            </div>
-                            <button id="ipfsUploadButton" onclick="handleFileUploadAndRecord()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition disabled:bg-gray-400">
-                                Calculate RV & Record On-Chain
-                            </button>
+            <!-- Right Column: Visualization & Data -->
+            <div class="lg:col-span-2 space-y-6">
+                <div id="resultsArea" class="hidden space-y-6">
+                    <!-- Chart Section -->
+                    <section class="glass-card border rounded-xl p-6 shadow-sm h-[400px]">
+                        <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Residual Value (RV) Trend</h2>
+                        <div class="h-[320px]">
+                            <canvas id="rvChart"></canvas>
                         </div>
-                    </div>
+                    </section>
 
-                    <div id="resultsArea" class="mt-12 hidden">
-                        <div class="border-t pt-8">
-                            <h4 class="text-xl font-bold text-gray-800 mb-6">RV Trend Visualization</h4>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 h-[400px]">
-                                <canvas id="rvChart"></canvas>
-                            </div>
-                            
-                            <div class="mt-8">
-                                <h4 class="text-lg font-bold text-gray-800 mb-4">Processed Data Preview</h4>
-                                <div id="tableContainer" class="overflow-x-auto bg-white rounded-lg border border-gray-200 text-sm">
-                                    <!-- Dynamic Table -->
-                                </div>
-                            </div>
+                    <!-- Data Table Section -->
+                    <section class="glass-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="bg-slate-50 px-6 py-3 border-b flex justify-between items-center">
+                            <h2 class="text-sm font-bold text-slate-600 uppercase">Verification Details</h2>
+                            <span id="totalCountDisplay" class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">Total Records: Loading...</span>
                         </div>
-                    </div>
+                        <div id="tableContainer" class="overflow-x-auto max-h-[500px]">
+                            <!-- Dynamic Table -->
+                        </div>
+                    </section>
                 </div>
 
-                <!-- Search Tab -->
-                <div id="content-search" class="hidden text-center py-12">
-                    <div class="max-w-md mx-auto">
-                        <h4 class="text-xl font-bold text-gray-800 mb-4">Verify Record Integrity</h4>
-                        <div class="flex gap-2">
-                            <input type="number" id="searchFileId" class="flex-1 p-3 border border-gray-300 rounded-lg" placeholder="Enter Aircraft ID">
-                            <button onclick="searchBlockchain()" class="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-black font-bold">Search</button>
-                        </div>
-                        <div id="searchResult" class="mt-8 text-left p-4 bg-gray-50 rounded border border-gray-200 hidden break-all">
-                            <!-- CID result -->
-                        </div>
+                <!-- Welcome Screen -->
+                <div id="welcomeScreen" class="flex flex-col items-center justify-center h-full py-20 text-center space-y-4">
+                    <div class="bg-blue-100 p-6 rounded-full">
+                        <svg class="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
+                    <h1 class="text-2xl font-bold text-slate-800">Awaiting Data Entry</h1>
+                    <p class="text-slate-500 max-w-md">Connect your MetaMask wallet and upload a maintenance CSV to calculate and verify aircraft asset value on the BSC Testnet.</p>
                 </div>
             </div>
         </div>
     </main>
 
-    <script src="app.js"></script>
     <script>
-        function setActiveTab(tab) {
-            ['upload', 'search'].forEach(t => {
-                document.getElementById(`content-${t}`).classList.add('hidden');
-                document.getElementById(`tab-${t}`).className = 'px-6 py-4 font-bold text-gray-500 hover:text-blue-600';
-            });
-            document.getElementById(`content-${tab}`).classList.remove('hidden');
-            document.getElementById(`tab-${tab}`).className = 'px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600';
+        // --- Configuration ---
+        const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442";
+        const CONTRACT_ABI = [
+            {"inputs":[{"internalType":"address[]","name":"_admins","type":"address[]"}],"stateMutability":"nonpayable","type":"constructor"},
+            {"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"fileId","type":"uint256"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"}],"name":"FileHashRecorded","type":"event"},
+            {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"fileHashes","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true},
+            {"inputs":[{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"addFileHash","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_fileId","type":"uint256"}],"name":"getFileHash","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true}
+        ];
+        const PINATA_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+        const AIRCRAFT_PARAMS = {
+            "B787": { initialPrice: 190000000, permDepr: 1185.36, varDepr: 2406.64, annualEconRate: 0.04 },
+            "B737": { initialPrice: 80000000, permDepr: 715.61, varDepr: 1452.90, annualEconRate: 0.04 },
+            "A320": { initialPrice: 77000000, permDepr: 796.79, varDepr: 1617.72, annualEconRate: 0.04 },
+            "B777": { initialPrice: 140000000, permDepr: 1568.66, varDepr: 3184.85, annualEconRate: 0.04 },
+            "DEFAULT": { initialPrice: 80000000, permDepr: 700.00, varDepr: 1400.00, annualEconRate: 0.04 }
+        };
+
+        let web3, contract, chartInstance;
+
+        // --- Logic: Upload ---
+        async function handleProfessionalUpload() {
+            const tailNo = document.getElementById('aircraftId').value.trim();
+            const fileInput = document.getElementById('maintenanceFile');
+            const key = document.getElementById('pinataApiKey').value;
+            const secret = document.getElementById('pinataApiSecret').value;
+
+            if (!tailNo || !fileInput.files[0] || !key || !secret) {
+                return showStatus("Error: Missing Tail Number, File, or API Keys.", "red");
+            }
+
+            const rawFile = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    showStatus("1. Uploading Raw Data to IPFS...", "blue");
+                    const rawCid = await uploadToIPFS(rawFile, key, secret);
+                    
+                    showStatus("2. Calculating Residual Value (RV)...", "blue");
+                    const modelKey = Object.keys(AIRCRAFT_PARAMS).find(k => tailNo.toUpperCase().includes(k)) || "DEFAULT";
+                    const params = AIRCRAFT_PARAMS[modelKey];
+                    const processedData = calculateRV(e.target.result, params);
+                    
+                    const processedCsv = jsonToCsv(processedData);
+                    const pFile = new File([processedCsv], `PROCESSED_${tailNo}.csv`, { type: 'text/csv' });
+                    const processedCid = await uploadToIPFS(pFile, key, secret);
+                    
+                    showStatus("3. Recording Proof on Blockchain...", "blue");
+                    // Format: TAIL_NUMBER|RAW_CID|PROCESSED_CID
+                    const metadata = `${tailNo.toUpperCase()}|${rawCid}|${processedCid}`;
+                    const accounts = await web3.eth.getAccounts();
+                    const receipt = await contract.methods.addFileHash(metadata).send({ from: accounts[0] });
+                    
+                    const newId = receipt.events.FileHashRecorded.returnValues.fileId;
+                    showStatus(`Success! Record ID: ${newId} (Tail: ${tailNo})`, "green");
+                    renderUI(processedData);
+                    refreshRecordCount();
+                } catch (err) {
+                    showStatus(`Failed: ${err.message}`, "red");
+                }
+            };
+            reader.readAsText(rawFile);
         }
+
+        // --- Logic: Advanced Search (Search by ID or Tail Number) ---
+        async function searchSmart() {
+            const query = document.getElementById('searchQuery').value.trim();
+            const statusDiv = document.getElementById('searchResult');
+            if (!query) return;
+
+            try {
+                showStatus(`Searching for "${query}"...`, "blue");
+                let metadata = "";
+                let foundId = query;
+
+                // Check if input is Numeric ID or Tail Number
+                if (isNaN(query)) {
+                    // Logic: Search by Tail Number (Scan Blockchain Records)
+                    showStatus(`Scanning blockchain for Tail Number: ${query}...`, "blue");
+                    const total = await getCount();
+                    let matchFound = false;
+                    for (let i = total - 1; i >= 0; i--) { // Scan backwards for latest
+                        const raw = await contract.methods.fileHashes(i).call();
+                        if (raw.startsWith(query.toUpperCase() + "|")) {
+                            metadata = raw;
+                            foundId = i;
+                            matchFound = true;
+                            break;
+                        }
+                    }
+                    if (!matchFound) throw new Error("Tail Number not found on chain.");
+                } else {
+                    // Direct ID Search
+                    metadata = await contract.methods.getFileHash(query).call();
+                }
+
+                const [tail, rawCid, processedCid] = metadata.split('|');
+                
+                statusDiv.classList.remove('hidden');
+                statusDiv.innerHTML = `
+                    <div class="p-4 bg-white border border-blue-200 rounded-lg shadow-sm">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-blue-900">✈️ ${tail}</span>
+                            <span class="text-[10px] text-slate-400">Record ID: ${foundId}</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <a href="https://gateway.pinata.cloud/ipfs/${rawCid}" target="_blank" class="text-xs text-blue-600 underline">View FAA Raw Record</a>
+                            <a href="https://gateway.pinata.cloud/ipfs/${processedCid}" target="_blank" class="text-xs text-blue-600 underline">View Valuation Audit</a>
+                        </div>
+                    </div>
+                `;
+
+                const resp = await fetch(`https://gateway.pinata.cloud/ipfs/${processedCid}`);
+                const csv = await resp.text();
+                renderUI(parseProcessedCsv(csv));
+                showStatus(`Data loaded for ID: ${foundId}`, "green");
+
+            } catch (e) {
+                showStatus(`Search Error: ${e.message}`, "red");
+                statusDiv.classList.add('hidden');
+            }
+        }
+
+        // --- Core Helpers ---
+        function calculateRV(csv, params) {
+            const lines = csv.trim().split(/\r?\n/);
+            const headers = lines[0].split(',');
+            const idxTis = headers.findIndex(h => h.toLowerCase().includes('tis'));
+            const idxWork = headers.findIndex(h => h.toLowerCase().includes('work type'));
+            const idxDate = headers.findIndex(h => h.toLowerCase().includes('date'));
+
+            let currentRV = params.initialPrice;
+            let mr = 0;
+            let lastTis = 0;
+            let startDate = null;
+
+            return lines.slice(1).map((line, i) => {
+                const cells = line.split(',');
+                const d = new Date(cells[idxDate]);
+                const tis = parseFloat(cells[idxTis]) || 0;
+                const work = cells[idxWork] || "";
+                if (i === 0) startDate = d;
+
+                const deltaTis = tis - lastTis;
+                const depr = (deltaTis * params.permDepr) + ((params.initialPrice * params.annualEconRate) * (deltaTis / 2000));
+                currentRV -= depr;
+                mr += (deltaTis * params.varDepr);
+
+                let note = "";
+                if (work.includes('Check')) {
+                    currentRV += mr;
+                    note = `Recaptured $${mr.toFixed(0)}`;
+                    mr = 0;
+                }
+                lastTis = tis;
+                return { date: cells[idxDate], tis, work, rv: currentRV, mr, note };
+            });
+        }
+
+        async function uploadToIPFS(file, key, secret) {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(PINATA_URL, {
+                method: 'POST',
+                headers: { 'pinata_api_key': key, 'pinata_secret_api_key': secret },
+                body: formData
+            });
+            const j = await res.json();
+            return j.IpfsHash;
+        }
+
+        function renderUI(data) {
+            document.getElementById('welcomeScreen').classList.add('hidden');
+            document.getElementById('resultsArea').classList.remove('hidden');
+
+            // Table
+            let html = `<table class="min-w-full text-[11px]"><thead class="bg-slate-50 border-b sticky top-0"><tr>
+                <th class="p-3 text-left">DATE</th><th class="p-3 text-left">TIS</th>
+                <th class="p-3 text-left text-blue-700">RV (USD)</th><th class="p-3 text-left text-red-600">MR BALANCE</th>
+                <th class="p-3 text-left">REMARKS</th></tr></thead><tbody>`;
+            data.forEach(r => {
+                html += `<tr class="border-b hover:bg-slate-50">
+                    <td class="p-3">${r.date}</td><td class="p-3">${r.tis}</td>
+                    <td class="p-3 font-bold">$${r.rv.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                    <td class="p-3">$${r.mr.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                    <td class="p-3 italic text-green-600">${r.note}</td></tr>`;
+            });
+            document.getElementById('tableContainer').innerHTML = html + "</tbody></table>";
+
+            // Chart
+            const ctx = document.getElementById('rvChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{ label: 'Residual Value', data: data.map(d => d.rv), borderColor: '#1d4ed8', backgroundColor: 'rgba(29, 78, 216, 0.1)', fill: true, tension: 0.3 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // --- Data Handling ---
+        function jsonToCsv(json) {
+            const h = "Date,TIS,Work,RV,MR,Note";
+            const r = json.map(x => `${x.date},${x.tis},"${x.work}",${x.rv},${x.mr},"${x.note}"`);
+            return [h, ...r].join("\n");
+        }
+
+        function parseProcessedCsv(csv) {
+            return csv.split("\n").slice(1).map(l => {
+                const p = l.split(",");
+                return { date: p[0], tis: p[1], work: p[2], rv: parseFloat(p[3]), mr: parseFloat(p[4]), note: p[5] };
+            });
+        }
+
+        // --- Blockchain Utils ---
+        async function getCount() {
+            let c = 0;
+            while (true) {
+                try { await contract.methods.fileHashes(c).call(); c++; } 
+                catch (e) { break; }
+            }
+            return c;
+        }
+
+        async function refreshRecordCount() {
+            const count = await getCount();
+            document.getElementById('totalCountDisplay').textContent = `Total Records: ${count}`;
+        }
+
+        function showStatus(msg, color) {
+            const el = document.getElementById('statusMessage');
+            el.className = `mb-6 p-4 rounded-lg text-sm font-medium shadow-sm bg-${color}-100 text-${color}-800`;
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+                const acc = await web3.eth.getAccounts();
+                document.getElementById('walletAddress').textContent = acc[0].substring(0,12) + "...";
+                refreshRecordCount();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initWeb3);
     </script>
 </body>
 </html>
