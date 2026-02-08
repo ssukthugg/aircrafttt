@@ -80,12 +80,13 @@
                 <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
                     <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center italic">Search Registry</h2>
                     <div class="flex space-x-2 mb-3">
-                        <input type="text" id="searchQuery" placeholder="N770ER or Record ID (1,2,3...)" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm">
-                        <button onclick="searchSmart()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl font-bold transition-all">Go</button>
+                        <input type="number" id="searchQuery" placeholder="Enter Record ID (1, 2, 3...)" min="1" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm">
+                        <button onclick="searchByRecordId()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl font-bold transition-all">Go</button>
                     </div>
                     <div id="searchResultMeta" class="hidden p-4 bg-indigo-50 border border-indigo-100 rounded-xl fade-in text-[11px] leading-relaxed"></div>
                     <div class="mt-3 text-[10px] text-slate-400">
-                        <p>💡 Search by tail number (e.g., N737CL) or Record ID (starts from 1)</p>
+                        <p>💡 Enter the Record ID number (IDs start from 1)</p>
+                        <p class="mt-1">You'll receive a Record ID when you upload a new maintenance log.</p>
                     </div>
                 </section>
 
@@ -299,7 +300,30 @@
                 hideLoading();
                 
                 const recordId = receipt.events.FileHashRecorded.returnValues.fileId;
-                notify("success", `✅ Record secured on-chain! ID: ${recordId} | Tail: ${tail}`);
+                
+                // Show prominent success message with Record ID
+                notify("success", `✅ SUCCESS! Your maintenance log has been secured on the blockchain.`);
+                
+                // Display Record ID prominently
+                setTimeout(() => {
+                    const el = document.getElementById('statusMessage');
+                    el.className = `mb-6 p-6 rounded-xl text-sm font-medium fade-in border bg-green-50 text-green-900 border-green-200`;
+                    el.innerHTML = `
+                        <div class="flex items-start space-x-3">
+                            <div class="text-2xl">✅</div>
+                            <div class="flex-1">
+                                <p class="font-bold text-lg mb-2">Record Successfully Created!</p>
+                                <div class="bg-white border border-green-200 rounded-lg p-4 mb-3">
+                                    <p class="text-xs text-green-700 mb-1">YOUR RECORD ID:</p>
+                                    <p class="text-3xl font-black text-green-900 font-mono">${recordId}</p>
+                                </div>
+                                <p class="text-xs text-green-700">Aircraft: <span class="font-bold">${tail}</span> | Model: <span class="font-bold">${type}</span></p>
+                                <p class="text-xs text-green-600 mt-2">💡 Save this Record ID to retrieve your data later!</p>
+                            </div>
+                        </div>
+                    `;
+                    el.classList.remove('hidden');
+                }, 100);
 
                 // Display results
                 displayResults(processedData, tail, type, rawCid, processedCid);
@@ -319,12 +343,12 @@
         }
 
         // =============================================
-        // SEARCH HANDLER
+        // SEARCH HANDLER (Record ID Only)
         // =============================================
-        async function searchSmart() {
+        async function searchByRecordId() {
             const query = document.getElementById('searchQuery').value.trim();
             if (!query) {
-                notify("error", "Please enter a search query.");
+                notify("error", "Please enter a Record ID.");
                 return;
             }
             if (!contract) {
@@ -332,50 +356,24 @@
                 return;
             }
 
+            const recordId = parseInt(query);
+            if (isNaN(recordId) || recordId < 1) {
+                notify("error", "Please enter a valid Record ID (must be 1 or higher).");
+                return;
+            }
+
             try {
-                showLoading("Blockchain Scanner", `Searching for "${query}"...`);
+                showLoading("Blockchain Query", `Fetching Record ID ${recordId}...`);
                 
-                let metadata = "";
-                let foundId = null;
-
-                // Check if query is numeric (Record ID) or string (Tail Number)
-                if (!isNaN(query)) {
-                    // Direct ID search
-                    foundId = query;
-                    try {
-                        metadata = await contract.methods.getFileHash(query).call();
-                        if (!metadata || metadata === '') {
-                            throw new Error(`Record ID ${query} does not exist.`);
-                        }
-                    } catch (e) {
-                        throw new Error(`Record ID ${query} not found. IDs start from 1.`);
+                // Fetch metadata from blockchain
+                let metadata;
+                try {
+                    metadata = await contract.methods.getFileHash(recordId).call();
+                    if (!metadata || metadata === '') {
+                        throw new Error(`Record ID ${recordId} does not exist.`);
                     }
-                } else {
-                    // Search by tail number - sequential scan
-                    const queryUpper = query.toUpperCase();
-                    let searchId = 1;
-                    let found = false;
-                    
-                    while (searchId < 1000) { // Safety limit
-                        try {
-                            const hash = await contract.methods.fileHashes(searchId).call();
-                            if (!hash || hash === '') break;
-                            
-                            if (hash.startsWith(queryUpper + '|')) {
-                                foundId = searchId;
-                                metadata = hash;
-                                found = true;
-                                break;
-                            }
-                            searchId++;
-                        } catch (e) {
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        throw new Error(`Tail number "${query}" not found in registry.`);
-                    }
+                } catch (e) {
+                    throw new Error(`Record ID ${recordId} not found. Please check the ID and try again.`);
                 }
 
                 // Parse metadata
@@ -389,16 +387,16 @@
                 // Display search result
                 document.getElementById('searchResultMeta').classList.remove('hidden');
                 document.getElementById('searchResultMeta').innerHTML = `
-                    <p class="font-bold text-indigo-900 mb-2">✈️ Registration: ${tail} ${type ? `(${type})` : ''}</p>
-                    <p class="text-indigo-700 mb-2">Record ID: ${foundId}</p>
-                    <div class="flex flex-col gap-1">
-                        <a href="${IPFS_GATEWAYS[0]}${rawCid}" target="_blank" class="text-indigo-500 hover:text-indigo-700 underline">📄 View Original CSV</a>
-                        <a href="${IPFS_GATEWAYS[0]}${processedCid}" target="_blank" class="text-indigo-500 hover:text-indigo-700 underline">📊 View Valuation Report</a>
+                    <p class="font-bold text-indigo-900 mb-2">✈️ Aircraft: ${tail} ${type ? `(${type})` : ''}</p>
+                    <p class="text-indigo-700 mb-3 font-mono text-xs">Record ID: ${recordId}</p>
+                    <div class="flex flex-col gap-2">
+                        <a href="${IPFS_GATEWAYS[0]}${rawCid}" target="_blank" class="text-indigo-500 hover:text-indigo-700 underline text-xs">📄 View Original CSV (IPFS)</a>
+                        <a href="${IPFS_GATEWAYS[0]}${processedCid}" target="_blank" class="text-indigo-500 hover:text-indigo-700 underline text-xs">📊 View Processed Valuation (IPFS)</a>
                     </div>
                 `;
 
                 // Fetch processed data from IPFS
-                showLoading("IPFS Fetch", "Retrieving processed data from distributed network...");
+                showLoading("IPFS Network", "Retrieving processed data from distributed storage...");
                 const csvText = await fetchFromIPFS(processedCid);
                 const parsed = Papa.parse(csvText.trim(), { header: true, skipEmptyLines: true });
                 
@@ -408,7 +406,7 @@
 
                 hideLoading();
                 displayResults(parsed.data, tail, type || 'Unknown', rawCid, processedCid);
-                notify("success", `✓ Found and loaded: ${tail}`);
+                notify("success", `✓ Loaded Record ID ${recordId}: ${tail}`);
 
             } catch (e) {
                 hideLoading();
