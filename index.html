@@ -3,145 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AeroChain | FAA-Compliant Maintenance Records</title>
+    <title>AeroChain | FAA-Compliant Valuation Ledger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/web3@1.8.1/dist/web3.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
-        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .glass-card { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(12px); }
         .loading-spinner {
             border: 3px solid #f3f4f6; border-top: 3px solid #2563eb;
             border-radius: 50%; width: 40px; height: 40px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .fade-in { animation: fadeIn 0.5s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        /* Placeholder styling to ensure it respects case */
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         ::placeholder { text-transform: none; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen font-sans text-slate-900">
 
-    <!-- Navbar -->
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">A</div>
-                    <span class="text-xl font-bold tracking-tight text-slate-800">AeroChain</span>
-                </div>
-                <div id="walletInfo" class="flex items-center space-x-3 text-sm font-medium text-slate-600 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
-                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse" id="statusDot"></div>
-                    <span id="walletAddress">Connect Wallet</span>
-                </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold italic">A</div>
+                <span class="text-xl font-black tracking-tight text-slate-800">AeroChain</span>
+            </div>
+            <div id="walletInfo" class="flex items-center space-x-3 text-xs font-bold text-slate-500 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
+                <div class="w-2 h-2 rounded-full bg-red-500" id="statusDot"></div>
+                <span id="walletAddress">OFFLINE</span>
             </div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div id="statusMessage" class="hidden mb-6 p-4 rounded-lg text-sm font-medium shadow-sm fade-in border"></div>
+        <div id="statusMessage" class="hidden mb-6 p-4 rounded-xl text-sm font-bold shadow-sm fade-in border"></div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Left Column: Settings & Upload -->
+            <!-- Sidebar: Inputs -->
             <div class="lg:col-span-4 space-y-6">
                 <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center italic underline decoration-blue-500 underline-offset-4">Record entry</h2>
+                    <h2 class="text-sm font-black mb-4 text-slate-400 uppercase tracking-widest">Asset Parameters</h2>
                     <div class="space-y-4">
-                        <!-- Model Selection -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-tight">Asset class</label>
-                            <select id="aircraftTypeSelect" onchange="updateDefaultPrice()" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm">
-                                <option value="B787">Boeing 787-9</option>
-                                <option value="B737 NG">Boeing 737 NG</option>
-                                <option value="A320 Family">Airbus A320 Family</option>
-                                <option value="B777">Boeing 777</option>
-                                <option value="A330">Airbus A330</option>
+                            <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">Aircraft Model</label>
+                            <select id="aircraftTypeSelect" onchange="updateDefaultParams()" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white font-bold focus:ring-2 focus:ring-blue-500 text-sm transition-all outline-none">
+                                <option value="B737">Boeing 737</option>
                                 <option value="B767">Boeing 767</option>
+                                <option value="B777">Boeing 777</option>
+                                <option value="B787">Boeing 787</option>
+                                <option value="A320">Airbus A320</option>
+                                <option value="A330">Airbus A330</option>
                             </select>
                         </div>
-                        <!-- Price Input -->
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-tight">Initial purchase price (USD)</label>
-                            <div class="relative">
-                                <span class="absolute left-4 top-2.5 text-slate-400 font-bold">$</span>
-                                <input type="number" id="initialPriceInput" value="190000000" class="w-full pl-8 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">Initial Price ($)</label>
+                                <input type="number" id="initialPriceInput" class="w-full px-4 py-3 border border-slate-200 rounded-xl font-mono text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">Econ Rate (p.a.)</label>
+                                <input type="text" id="econRateDisplay" disabled class="w-full px-4 py-3 border border-slate-100 bg-slate-50 rounded-xl font-mono text-sm text-slate-400">
                             </div>
                         </div>
-                        <!-- Tail No -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-tight">Tail number</label>
-                            <!-- Updated placeholder to lowercase e.g. and added style to prevent forced uppercase on placeholder -->
-                            <input type="text" id="aircraftTailNo" placeholder="e.g. N550MHA" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 uppercase text-sm">
+                            <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">Tail Number</label>
+                            <input type="text" id="aircraftTailNo" placeholder="e.g. N550MHA" class="w-full px-4 py-3 border border-slate-200 rounded-xl font-bold focus:ring-2 focus:ring-blue-500 text-sm outline-none">
                         </div>
-                        <!-- Pinata Keys -->
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-tight">Cloud authorization (Pinata)</label>
-                            <input type="password" id="pinataApiKey" placeholder="API Key" class="w-full px-4 py-2 mb-2 border border-slate-200 rounded-xl text-xs outline-none">
-                            <input type="password" id="pinataApiSecret" placeholder="Secret Key" class="w-full px-4 py-2 border border-slate-200 rounded-xl text-xs outline-none">
+                        <div class="pt-2">
+                            <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">Cloud Keys (Pinata)</label>
+                            <div class="space-y-2">
+                                <input type="password" id="pinataApiKey" placeholder="API Key" class="w-full px-4 py-2 border border-slate-200 rounded-lg text-[11px] outline-none">
+                                <input type="password" id="pinataApiSecret" placeholder="Secret Key" class="w-full px-4 py-2 border border-slate-200 rounded-lg text-[11px] outline-none">
+                            </div>
                         </div>
-                        <!-- File Upload -->
-                        <div class="p-4 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-center" onclick="document.getElementById('maintenanceFile').click()">
+                        <div class="p-5 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer text-center group" onclick="document.getElementById('maintenanceFile').click()">
                             <input type="file" id="maintenanceFile" accept=".csv" class="hidden">
-                            <p id="fileNameDisplay" class="text-xs text-slate-400 font-medium">Click to attach FAA maintenance log (.csv)</p>
+                            <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">📄</div>
+                            <p id="fileNameDisplay" class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">Attach FAA Log (.csv)</p>
                         </div>
-                        <button onclick="handleUpload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95">Verify & Secure Record</button>
+                        <button onclick="handleUpload()" class="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-xl transition-all active:scale-[0.98] text-sm uppercase tracking-widest">Execute Valuation</button>
                     </div>
                 </section>
 
-                <!-- Search by ID Only -->
                 <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center italic">Record search</h2>
-                    <div class="flex space-x-2 mb-3">
-                        <input type="number" id="searchQuery" placeholder="Record ID (e.g. 12)" class="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-indigo-500">
-                        <button onclick="searchByID()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl font-bold transition-all shadow-md text-sm">Search</button>
+                    <h2 class="text-sm font-black mb-4 text-slate-400 uppercase tracking-widest">On-Chain Audit</h2>
+                    <div class="flex space-x-2">
+                        <input type="number" id="searchQuery" placeholder="Record ID" class="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold outline-none">
+                        <button onclick="searchByID()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-black transition-all text-xs uppercase">Fetch</button>
                     </div>
-                    <div id="searchResultMeta" class="hidden p-4 bg-indigo-50 border border-indigo-100 rounded-xl fade-in text-[11px] leading-relaxed"></div>
+                    <div id="searchResultMeta" class="hidden mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl fade-in text-[10px] font-bold leading-relaxed text-blue-900"></div>
                 </section>
             </div>
 
-            <!-- Right Column: Results -->
+            <!-- Dashboard -->
             <div class="lg:col-span-8 space-y-6">
-                <div id="dataDashboard" class="hidden space-y-6">
-                    <!-- Chart -->
+                <div id="dataDashboard" class="hidden space-y-6 fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="glass-card p-6 rounded-2xl border border-slate-200">
+                            <p class="text-[10px] font-black text-slate-400 uppercase">Current Value</p>
+                            <p id="statCurrentRV" class="text-2xl font-black text-slate-800">$0</p>
+                        </div>
+                        <div class="glass-card p-6 rounded-2xl border border-slate-200">
+                            <p class="text-[10px] font-black text-slate-400 uppercase">Accrued MR</p>
+                            <p id="statCurrentMR" class="text-2xl font-black text-red-500">$0</p>
+                        </div>
+                        <div class="glass-card p-6 rounded-2xl border border-slate-200">
+                            <p class="text-[10px] font-black text-slate-400 uppercase">Recapture Events</p>
+                            <p id="statEvents" class="text-2xl font-black text-blue-600">0</p>
+                        </div>
+                    </div>
                     <section class="glass-card rounded-2xl border border-slate-200 shadow-sm p-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xs font-bold text-slate-400 tracking-tight">Residual value projection</h2>
-                            <div id="dashboardSummary" class="text-xs font-bold text-blue-600"></div>
-                        </div>
-                        <div class="h-[350px]">
-                            <canvas id="rvChart"></canvas>
-                        </div>
+                        <h2 class="text-[11px] font-black text-slate-400 uppercase mb-4">Value Decay & Recovery Graph</h2>
+                        <div class="h-[380px]"><canvas id="rvChart"></canvas></div>
                     </section>
-                    <!-- Table -->
                     <section class="glass-card rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div class="bg-slate-50 px-6 py-3 border-b text-xs font-bold text-slate-500 flex justify-between">
-                            <span>Compliance ledger</span>
-                            <span id="recordCountLabel"></span>
+                        <div class="bg-slate-50 px-6 py-4 border-b flex justify-between items-center">
+                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Transaction Ledger</span>
+                            <span id="recordCountLabel" class="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-black"></span>
                         </div>
-                        <div class="overflow-x-auto max-h-[500px]" id="tableWrapper"></div>
+                        <div class="overflow-x-auto max-h-[400px]" id="tableWrapper"></div>
                     </section>
                 </div>
 
-                <!-- Empty State -->
                 <div id="emptyState" class="flex flex-col items-center justify-center py-40 bg-white border border-dashed border-slate-200 rounded-3xl">
-                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-300 text-2xl animate-bounce">✈️</div>
-                    <h3 class="text-slate-800 font-bold text-xl">System awaiting data</h3>
-                    <p class="text-slate-400 text-sm mt-2">Upload a maintenance log or enter a Record ID to see the audit trail.</p>
+                    <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 text-slate-200 text-3xl">📡</div>
+                    <h3 class="text-slate-800 font-black text-xl uppercase tracking-tight">System Idle</h3>
+                    <p class="text-slate-400 text-sm mt-2 font-medium">Please connect your wallet and upload maintenance logs to begin valuation.</p>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Loading Modal / Success Modal -->
-    <div id="loadingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-        <div id="modalBox" class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full transition-all">
+    <!-- Modals & Notifications -->
+    <div id="loadingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full fade-in">
             <div id="spinner" class="loading-spinner mb-4"></div>
-            <div id="successIcon" class="hidden text-5xl mb-4">✅</div>
-            <h3 id="loadingTitle" class="text-lg font-bold">Synchronizing</h3>
-            <p id="loadingMessage" class="text-xs text-slate-500 text-center mt-2 leading-relaxed font-medium"></p>
-            <button id="modalCloseBtn" onclick="hideLoading()" class="hidden mt-6 w-full bg-slate-900 text-white font-bold py-2 rounded-xl">Got it</button>
+            <div id="successIcon" class="hidden text-5xl mb-4">💎</div>
+            <h3 id="loadingTitle" class="text-lg font-black uppercase tracking-tight">Processing</h3>
+            <p id="loadingMessage" class="text-[11px] text-slate-500 text-center mt-2 leading-relaxed font-bold"></p>
+            <button id="modalCloseBtn" onclick="hideLoading()" class="hidden mt-6 w-full bg-slate-900 text-white font-black py-3 rounded-xl uppercase text-xs tracking-widest transition-transform active:scale-95">Dismiss</button>
         </div>
     </div>
 
@@ -149,21 +150,17 @@
         const CONTRACT_ADDRESS = "0xf0Ac7007BCf7b9aaDE8fFc261937c4f56228d442";
         const CONTRACT_ABI = [{"inputs":[{"internalType":"address[]","name":"_admins","type":"address[]"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"fileId","type":"uint256"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"}],"name":"FileHashRecorded","type":"event"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"fileHashes","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true},{"inputs":[{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"addFileHash","outputs":[{"internalType":"uint256","name":"_fileId","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_fileId","type":"uint256"}],"name":"getFileHash","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function","constant":true}];
         
-        const DEPRECIATION_RESOURCES = {
-            "B787": { initialDefault: 190000000, permDepr: 1185.36, varDepr: 2406.64, econRate: 0.04 },
-            "B737 NG": { initialDefault: 80000000, permDepr: 715.61, varDepr: 1452.90, econRate: 0.04 },
-            "A320 Family": { initialDefault: 77000000, permDepr: 796.79, varDepr: 1617.72, econRate: 0.04 },
-            "B777": { initialDefault: 140000000, permDepr: 1568.655, varDepr: 3184.845, econRate: 0.04 },
-            "A330": { initialDefault: 175000000, permDepr: 1291.455, varDepr: 2622.045, econRate: 0.04 },
-            "B767": { initialDefault: 150000000, permDepr: 1101.375, varDepr: 2236.125, econRate: 0.04 }
+        // Data integration from aircraft_RV_var.xlsx
+        const AIRCRAFT_VARS = {
+            "B737": { initial: 80000000, perm: 715.605, var: 1452.895, econ: 0.05 },
+            "B767": { initial: 150000000, perm: 1101.375, var: 2236.125, econ: 0.05 },
+            "B777": { initial: 140000000, perm: 1568.655, var: 3184.845, econ: 0.05 },
+            "B787": { initial: 190000000, perm: 1185.360, var: 2406.640, econ: 0.05 },
+            "A320": { initial: 77000000, perm: 796.785, var: 1617.715, econ: 0.05 },
+            "A330": { initial: 175000000, perm: 1291.455, var: 2622.045, econ: 0.05 }
         };
 
-        const GATEWAYS = [
-            "https://gateway.pinata.cloud/ipfs/",
-            "https://cloudflare-ipfs.com/ipfs/",
-            "https://ipfs.io/ipfs/"
-        ];
-
+        const GATEWAYS = ["https://gateway.pinata.cloud/ipfs/", "https://cloudflare-ipfs.com/ipfs/"];
         let web3, contract, chartInstance;
 
         async function initWeb3() {
@@ -172,164 +169,198 @@
                 try {
                     const accs = await ethereum.request({ method: 'eth_requestAccounts' });
                     contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-                    document.getElementById('walletAddress').textContent = accs[0].substring(0, 10) + "...";
+                    document.getElementById('walletAddress').textContent = accs[0].substring(0, 12).toUpperCase();
                     document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-green-500";
-                } catch (e) { notify("error", "Wallet Connection Denied."); }
+                    updateDefaultParams();
+                } catch (e) { notify("error", "Wallet connection failed."); }
             }
         }
 
-        function updateDefaultPrice() {
+        function updateDefaultParams() {
             const type = document.getElementById('aircraftTypeSelect').value;
-            const priceInput = document.getElementById('initialPriceInput');
-            priceInput.value = DEPRECIATION_RESOURCES[type].initialDefault;
+            const data = AIRCRAFT_VARS[type];
+            document.getElementById('initialPriceInput').value = data.initial;
+            document.getElementById('econRateDisplay').value = (data.econ * 100).toFixed(1) + "%";
+        }
+
+        /**
+         * CORE VALUATION ENGINE (REVISED)
+         * - Economic Depreciation: Exponential Decay Model
+         * - Permanent Depr: Linear TIS-based
+         * - Variable Depr: Accrued in MR, Recaptured at Major Check
+         */
+        function calculateRV(csv, initialPrice, params) {
+            const rows = Papa.parse(csv.trim(), { header: true }).data;
+            let current_rv = initialPrice;
+            let current_mr_accrual = 0;
+            let last_tis = 0;
+            let recaptureCount = 0;
+            
+            return rows.filter(r => r.Date && r['Airframe TIS (hrs)']).map((r, idx) => {
+                const tis = parseFloat(r['Airframe TIS (hrs)']) || 0;
+                const delta_tis = tis - last_tis;
+                const work = (r['Work Type/Note'] || "");
+
+                // 1. ECONOMIC DEPRECIATION (Exponential Decay)
+                // Years elapsed = TIS / 2000 (Industry standard utilization)
+                const years = tis / 2000;
+                const econ_basis_value = initialPrice * Math.pow((1 - params.econ), years);
+                
+                // We calculate the delta change in economic value for this step
+                // But simpler logic for RV tracking is: RV = Econ_Value - Total_Perm_Depr - Current_MR
+                // This ensures the decay follows the exponent.
+                
+                // 2. PERMANENT DEPRECIATION (Cumulative)
+                const step_perm_depr = delta_tis * params.perm;
+
+                // 3. VARIABLE DEPRECIATION (MR Accrual)
+                const step_var_depr = delta_tis * params.var;
+                current_mr_accrual += step_var_depr;
+
+                // Preliminary RV (Decayed value - Permanent losses - Pending Variable losses)
+                // Note: current_rv is tracked iteratively for chart, but following formula for precision:
+                let calculated_rv = econ_basis_value - (tis * params.perm) - current_mr_accrual;
+
+                let eventNote = "";
+                // MAJOR CHECK RECAPTURE (Python Logic Integration)
+                if (/(B-Check|C-Check|D-Check)/i.test(work)) {
+                    // RV recovered by the total accumulated MR
+                    calculated_rv += current_mr_accrual; 
+                    eventNote = `RECAPTURED: +$${Math.round(current_mr_accrual).toLocaleString()}`;
+                    current_mr_accrual = 0; // Reset MR fund
+                    recaptureCount++;
+                }
+
+                last_tis = tis;
+                return {
+                    Date: r.Date,
+                    TIS: tis,
+                    Work: work,
+                    RV: Math.round(Math.max(0, calculated_rv)),
+                    MR: Math.round(current_mr_accrual),
+                    Event: eventNote,
+                    RawRecaptureCount: recaptureCount
+                };
+            });
         }
 
         async function handleUpload() {
-            const tail = document.getElementById('aircraftTailNo').value.trim().toUpperCase();
+            const tail = document.getElementById('aircraftTailNo').value.trim();
             const type = document.getElementById('aircraftTypeSelect').value;
-            const userPrice = parseFloat(document.getElementById('initialPriceInput').value);
+            const initP = parseFloat(document.getElementById('initialPriceInput').value);
             const file = document.getElementById('maintenanceFile').files[0];
             const key = document.getElementById('pinataApiKey').value;
             const secret = document.getElementById('pinataApiSecret').value;
 
-            if (!tail || !file || !key || !secret || isNaN(userPrice)) {
-                return notify("error", "All fields are required to secure the record.");
-            }
+            if (!tail || !file || !key || !secret || isNaN(initP)) return notify("error", "Missing required fields.");
 
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
-                    showLoading("Cloud sync", "Storing maintenance data on IPFS...");
+                    showLoading("Cloud Encryption", "Uploading logs to IPFS...");
                     const rawCid = await uploadToPinata(file, key, secret);
                     
-                    showLoading("Valuation engine", `Calculating Residual Value for ${tail}...`);
-                    const pData = calculateRV(e.target.result, userPrice, DEPRECIATION_RESOURCES[type]);
-                    const csvStr = Papa.unparse(pData);
-                    const processedCid = await uploadToPinata(new Blob([csvStr], { type: 'text/csv' }), key, secret);
+                    showLoading("Valuation Engine", "Applying Exponential Decay & Recapture...");
+                    const processed = calculateRV(e.target.result, initP, AIRCRAFT_VARS[type]);
+                    const csvStr = Papa.unparse(processed);
+                    const procCid = await uploadToPinata(new Blob([csvStr], { type: 'text/csv' }), key, secret);
                     
-                    showLoading("Blockchain sync", "Confirming transaction on Ethereum...");
-                    const meta = `${tail}|${rawCid}|${processedCid}|${type}|${userPrice}`;
-                    const accounts = await web3.eth.getAccounts();
+                    showLoading("Blockchain Audit", "Securing immutable hash on Ethereum...");
+                    const meta = `${tail}|${rawCid}|${procCid}|${type}|${initP}`;
+                    const accs = await web3.eth.getAccounts();
+                    const tx = await contract.methods.addFileHash(meta).send({ from: accs[0] });
                     
-                    const tx = await contract.methods.addFileHash(meta).send({ from: accounts[0] });
-                    const recordID = tx.events.FileHashRecorded.returnValues.fileId;
-                    
-                    showSuccess(recordID, tail);
-                    renderUI(pData, tail);
+                    showSuccess(tx.events.FileHashRecorded.returnValues.fileId, tail);
+                    renderUI(processed, tail);
                 } catch (err) { 
-                    hideLoading(); 
                     console.error(err);
-                    notify("error", "Blockchain Transaction Failed."); 
+                    hideLoading(); 
+                    notify("error", "Operation interrupted."); 
                 }
             };
             reader.readAsText(file);
         }
 
         async function searchByID() {
-            const recordID = document.getElementById('searchQuery').value.trim();
-            if (!recordID) return notify("error", "Please enter a valid Record ID.");
-
+            const id = document.getElementById('searchQuery').value.trim();
+            if (!id) return;
             try {
-                showLoading("Audit scan", `Retrieving Record #${recordID}...`);
-                const meta = await contract.methods.getFileHash(recordID).call();
-
-                if (!meta || meta === "") throw new Error("Record not found.");
+                showLoading("Vault Search", `Fetching Ledger #${id}...`);
+                const meta = await contract.methods.getFileHash(id).call();
+                if (!meta) throw new Error();
                 
-                const parts = meta.split('|');
-                const [tail, rCid, pCid, model, initP] = parts;
+                const [tail, rCid, pCid, model, initP] = meta.split('|');
+                const metaBox = document.getElementById('searchResultMeta');
+                metaBox.classList.remove('hidden');
+                metaBox.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="uppercase tracking-widest text-blue-500 mb-1">Audit Record #${id}</p>
+                            <p class="text-base font-black text-slate-800">${tail}</p>
+                            <p class="text-slate-400 font-bold">${model} | $${parseInt(initP).toLocaleString()}</p>
+                        </div>
+                        <div class="text-right space-y-1">
+                            <a href="${GATEWAYS[0]}${rCid}" target="_blank" class="block text-blue-600 underline">RAW LOG</a>
+                            <a href="${GATEWAYS[0]}${pCid}" target="_blank" class="block text-blue-600 underline">VALUATION CSV</a>
+                        </div>
+                    </div>`;
 
-                document.getElementById('searchResultMeta').classList.remove('hidden');
-                document.getElementById('searchResultMeta').innerHTML = `
-                    <div class="mb-2">
-                        <p class="font-bold text-indigo-900 text-sm">Record ID: ${recordID} (${tail})</p>
-                        <p class="text-slate-500 font-medium">Model: ${model || 'N/A'} | Entry Price: $${parseInt(initP || 0).toLocaleString()}</p>
-                    </div>
-                    <div class="flex flex-col gap-1 border-t border-indigo-100 pt-2 mt-2">
-                        <button onclick="window.open('${GATEWAYS[1]}${rCid}')" class="text-indigo-600 hover:text-indigo-800 font-bold text-left">📂 Original maintenance log</button>
-                        <button onclick="window.open('${GATEWAYS[1]}${pCid}')" class="text-indigo-600 hover:text-indigo-800 font-bold text-left">📊 Valuated audit report</button>
-                    </div>
-                `;
-
-                const csvData = await fetchMulti(pCid);
+                const csvData = await fetchIPFS(pCid);
                 const data = Papa.parse(csvData.trim(), { header: true }).data;
                 renderUI(data, tail);
                 hideLoading();
-            } catch (e) { hideLoading(); notify("error", e.message); }
-        }
-
-        async function fetchMulti(cid) {
-            for (let g of GATEWAYS) {
-                try {
-                    const res = await fetch(`${g}${cid}`, { signal: AbortSignal.timeout(6000) });
-                    if (res.ok) return await res.text();
-                } catch (e) { console.warn(`Gateway ${g} failed...`); }
+            } catch (e) { 
+                hideLoading(); 
+                notify("error", "Asset record not found."); 
             }
-            throw new Error("Unable to fetch data from IPFS. Try again later.");
-        }
-
-        function calculateRV(csv, initialPrice, params) {
-            const rows = Papa.parse(csv.trim(), { header: true }).data;
-            let currentRv = initialPrice;
-            let mrFund = 0;
-            let lastTis = 0;
-
-            return rows.map(r => {
-                const tis = parseFloat(r['Airframe TIS (hrs)']) || 0;
-                const delta = tis - lastTis;
-                const work = (r['Work Type/Note'] || "").toLowerCase();
-
-                const depr = (delta * params.permDepr) + ((initialPrice * params.econRate) * (delta / 2000));
-                currentRv -= depr;
-                mrFund += (delta * params.varDepr);
-
-                let event = "";
-                if (work.includes('check')) {
-                    currentRv += mrFund;
-                    event = `Value recaptured (+$${Math.round(mrFund).toLocaleString()})`;
-                    mrFund = 0;
-                }
-                lastTis = tis;
-                return {
-                    Date: r['Date'], TIS: tis, Work: r['Work Type/Note'],
-                    RV: Math.round(currentRv), MR: Math.round(mrFund), Event: event
-                };
-            });
         }
 
         async function uploadToPinata(blob, key, secret) {
-            const fd = new FormData();
-            fd.append('file', blob);
+            const fd = new FormData(); fd.append('file', blob);
             const res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-                method: 'POST',
-                headers: { 'pinata_api_key': key, 'pinata_secret_api_key': secret },
-                body: fd
+                method: 'POST', headers: { 'pinata_api_key': key, 'pinata_secret_api_key': secret }, body: fd
             });
-            if (!res.ok) throw new Error("Cloud Storage Auth Error");
-            const d = await res.json();
+            const d = await res.json(); 
+            if (d.error) throw new Error(d.error);
             return d.IpfsHash;
+        }
+
+        async function fetchIPFS(cid) {
+            for (let g of GATEWAYS) {
+                try {
+                    const r = await fetch(`${g}${cid}`, { signal: AbortSignal.timeout(8000) });
+                    if (r.ok) return await r.text();
+                } catch (e) {}
+            }
+            throw new Error("Gateway timeout.");
         }
 
         function renderUI(data, tail) {
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('dataDashboard').classList.remove('hidden');
-            document.getElementById('dashboardSummary').textContent = `${tail} audit trail`;
-            document.getElementById('recordCountLabel').textContent = `${data.length} logs`;
+            document.getElementById('recordCountLabel').textContent = `${data.length} ENTRIES`;
 
-            let html = `<table class="min-w-full text-[11px]"><thead class="bg-white border-b sticky top-0"><tr>
-                <th class="p-4 text-left font-bold text-slate-400">Log date</th>
-                <th class="p-4 text-left font-bold text-slate-400">TIS (hrs)</th>
-                <th class="p-4 text-left font-bold text-blue-600">Residual value (USD)</th>
-                <th class="p-4 text-left font-bold text-red-400">MR balance</th>
-                <th class="p-4 text-left font-bold text-slate-400">Event/Note</th>
+            const lastEntry = data[data.length - 1];
+            document.getElementById('statCurrentRV').textContent = `$${parseInt(lastEntry.RV).toLocaleString()}`;
+            document.getElementById('statCurrentMR').textContent = `$${parseInt(lastEntry.MR).toLocaleString()}`;
+            document.getElementById('statEvents').textContent = lastEntry.RawRecaptureCount || 0;
+
+            let html = `<table class="min-w-full text-[11px] font-bold"><thead class="bg-white border-b sticky top-0 z-10"><tr>
+                <th class="px-6 py-4 text-left font-black text-slate-400 uppercase tracking-tighter">Date</th>
+                <th class="px-6 py-4 text-left font-black text-slate-400 uppercase tracking-tighter">TIS</th>
+                <th class="px-6 py-4 text-left font-black text-blue-600 uppercase tracking-tighter">Residual Value</th>
+                <th class="px-6 py-4 text-left font-black text-red-400 uppercase tracking-tighter">MR Accrued</th>
+                <th class="px-6 py-4 text-left font-black text-slate-400 uppercase tracking-tighter">Event / Work Note</th>
             </tr></thead><tbody class="divide-y divide-slate-100 bg-white">`;
             
             data.forEach(r => {
-                html += `<tr class="hover:bg-blue-50/50 transition-colors">
-                    <td class="p-4 whitespace-nowrap">${r.Date}</td>
-                    <td class="p-4 font-mono">${r.TIS}</td>
-                    <td class="p-4 font-bold text-blue-800">$${parseInt(r.RV).toLocaleString()}</td>
-                    <td class="p-4 text-slate-400 font-mono">$${parseInt(r.MR).toLocaleString()}</td>
-                    <td class="p-4 font-medium ${r.Event ? 'text-blue-600' : 'text-slate-500'}">${r.Event || r.Work || '-'}</td>
+                const isEvent = r.Event && r.Event !== "";
+                html += `<tr class="${isEvent ? 'bg-blue-50/50' : 'hover:bg-slate-50'} transition-colors">
+                    <td class="px-6 py-4 text-slate-500">${r.Date}</td>
+                    <td class="px-6 py-4 font-mono">${r.TIS}</td>
+                    <td class="px-6 py-4 text-slate-900">$${parseInt(r.RV).toLocaleString()}</td>
+                    <td class="px-6 py-4 text-red-400 font-mono">$${parseInt(r.MR).toLocaleString()}</td>
+                    <td class="px-6 py-4 ${isEvent ? 'text-blue-600' : 'text-slate-400'}">${r.Event || r.Work || '-'}</td>
                 </tr>`;
             });
             document.getElementById('tableWrapper').innerHTML = html + "</tbody></table>";
@@ -341,17 +372,16 @@
                 data: {
                     labels: data.map(d => d.Date),
                     datasets: [{
-                        label: 'Residual value',
-                        data: data.map(d => d.RV),
-                        borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.05)',
-                        fill: true, tension: 0.3, borderWidth: 3, pointRadius: 0, hoverRadius: 5
+                        label: 'Residual Value (USD)', data: data.map(d => d.RV),
+                        borderColor: '#0f172a', backgroundColor: 'rgba(15, 23, 42, 0.05)',
+                        fill: true, tension: 0.2, borderWidth: 4, pointRadius: 0
                     }]
                 },
                 options: { 
                     responsive: true, maintainAspectRatio: false, 
                     plugins: { legend: { display: false } },
-                    scales: { 
-                        y: { ticks: { font: { size: 10 }, callback: v => '$' + (v/1000000).toFixed(0) + 'M' } },
+                    scales: {
+                        y: { ticks: { callback: (v) => '$' + (v/1000000).toFixed(0) + 'M' }, grid: { borderDash: [5, 5] } },
                         x: { grid: { display: false } }
                     }
                 }
@@ -360,9 +390,9 @@
 
         function notify(type, msg) {
             const el = document.getElementById('statusMessage');
-            el.className = `mb-6 p-4 rounded-xl text-sm font-bold fade-in border ${type==='success'?'bg-emerald-50 text-emerald-800 border-emerald-100':'bg-rose-50 text-rose-800 border-rose-100'}`;
-            el.textContent = msg;
-            el.classList.remove('hidden');
+            el.className = `mb-6 p-4 rounded-xl text-xs font-black uppercase tracking-widest fade-in border ${type==='success'?'bg-emerald-50 text-emerald-800 border-emerald-100':'bg-rose-50 text-rose-800 border-rose-100'}`;
+            el.textContent = msg; el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
         }
 
         function showLoading(t, m) {
@@ -378,17 +408,15 @@
             document.getElementById('spinner').classList.add('hidden');
             document.getElementById('successIcon').classList.remove('hidden');
             document.getElementById('modalCloseBtn').classList.remove('hidden');
-            document.getElementById('loadingTitle').textContent = "Security complete";
-            document.getElementById('loadingMessage').innerHTML = `
-                <span class="text-slate-800 text-sm font-bold">Record ID: ${id}</span><br>
-                Asset ${tail} has been successfully secured. <br>Please save this ID for future search.
-            `;
+            document.getElementById('loadingTitle').textContent = "Asset Validated";
+            document.getElementById('loadingMessage').innerHTML = `On-chain Index: <b>#${id}</b><br>Valuation for ${tail} secured.`;
         }
 
         function hideLoading() { document.getElementById('loadingModal').classList.add('hidden'); }
-
+        
         document.getElementById('maintenanceFile').addEventListener('change', e => {
-            document.getElementById('fileNameDisplay').textContent = e.target.files[0] ? e.target.files[0].name : "Select CSV";
+            const name = e.target.files[0] ? e.target.files[0].name : "Attach FAA Log (.csv)";
+            document.getElementById('fileNameDisplay').textContent = name.toUpperCase();
         });
 
         window.onload = initWeb3;
