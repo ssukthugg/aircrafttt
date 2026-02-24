@@ -11,10 +11,10 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg:#e7eaf1;--surface:#e6eeff;--surface2:#dfe7f5;
-            --border:#3d506f;--border-bright:#2a3d5a;
+            --bg:#0a0e17;--surface:#111722;--surface2:#171f2e;
+            --border:#1e2a3d;--border-bright:#2a3d5a;
             --accent:#3b82f6;--accent-dim:#1d3557;--accent2:#06b6d4;
-            --text:#111113;--text-dim:#505c6b;--text-mid:#3e4246;
+            --text:#e2e8f0;--text-dim:#64748b;--text-mid:#94a3b8;
             --red:#ef4444;--green:#22c55e;--yellow:#eab308;
             --mono:'IBM Plex Mono',monospace;--display:'Barlow Condensed',sans-serif;
         }
@@ -172,7 +172,7 @@
 
                     <div>
                         <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">Tail Number</label>
-                        <input type="text" id="aircraftTailNo" placeholder="e.g. N550MHA" oninput="liveValidate()">
+                        <input type="text" id="aircraftTailNo" placeholder="e.g. N550MHA" style="text-transform:uppercase;" oninput="liveValidate()">
                         <div class="field-hint" id="hintTail"></div>
                     </div>
 
@@ -294,13 +294,23 @@ const BNB_TESTNET_CHAIN_ID = 97;
 const REQUIRED_COLUMNS    = ['Date', 'Airframe TIS (hrs)', 'Work Type/Note'];
 const GATEWAYS = ["https://gateway.pinata.cloud/ipfs/","https://cloudflare-ipfs.com/ipfs/"];
 
+// ─── AIRCRAFT PARAMETERS ─────────────────────────────────────
+// Per paper Section IV.B:
+//   RV_t = V0*e^(-alpha*t) - beta*t - (1-delta)*gamma*t
+//
+//   alpha : continuous economic depreciation rate (annualized, 1yr=2000 TIS hrs)
+//   beta  : permanent physical depreciation per TIS hour (irreversible)
+//   gamma : variable physical depreciation per TIS hour (restorable)
+//   delta : restoration coefficient in [0,1]
+//           1.0 = blockchain-anchored (full recapture, zero verification latency)
+//           <1.0 = conventional recordkeeping (valuation lag discount)
 const AIRCRAFT_VARS = {
-    B737:{initial:80000000, perm:715.605,  var:1452.895,econ:.05},
-    B767:{initial:150000000,perm:1101.375, var:2236.125,econ:.05},
-    B777:{initial:140000000,perm:1568.655, var:3184.845,econ:.05},
-    B787:{initial:190000000,perm:1185.360, var:2406.640,econ:.05},
-    A320:{initial:77000000, perm:796.785,  var:1617.715,econ:.05},
-    A330:{initial:175000000,perm:1291.455, var:2622.045,econ:.05}
+    B737:{initial:80000000,  alpha:0.0513, beta:715.605,  gamma:1452.895, delta:1.0},
+    B767:{initial:150000000, alpha:0.0513, beta:1101.375, gamma:2236.125, delta:1.0},
+    B777:{initial:140000000, alpha:0.0513, beta:1568.655, gamma:3184.845, delta:1.0},
+    B787:{initial:190000000, alpha:0.0513, beta:1185.360, gamma:2406.640, delta:1.0},
+    A320:{initial:77000000,  alpha:0.0513, beta:796.785,  gamma:1617.715, delta:1.0},
+    A330:{initial:175000000, alpha:0.0513, beta:1291.455, gamma:2622.045, delta:1.0}
 };
 
 let web3, contract, chartInstance, CONTRACT_ABI;
@@ -315,6 +325,17 @@ async function initApp() {
         const res  = await fetch('./AircraftMaintenanceHistory.json');
         const json = await res.json();
         CONTRACT_ABI = json.abi;
+
+        // networks에서 현재 체인 ID에 맞는 주소 자동으로 읽기
+        const chainId = await new Web3(window.ethereum).eth.getChainId();
+        const network = json.networks[chainId];
+        if (!network) {
+            notify("error", `No deployment found for chain ${chainId}`);
+            return;
+        }
+        CONTRACT_ADDRESS = network.address;  // ← 자동 세팅
+        console.log("Contract loaded:", CONTRACT_ADDRESS);
+        
     } catch(e) {
         notify("warn","⚠ Could not load AircraftMaintenanceHistory.json — place it in the repo root.");
         return;
@@ -340,7 +361,7 @@ function updateDefaultParams() {
     const d = AIRCRAFT_VARS[document.getElementById('aircraftTypeSelect').value];
     if(!d) return;
     document.getElementById('initialPriceInput').value = d.initial;
-    document.getElementById('econRateDisplay').value   = (d.econ*100).toFixed(1)+"%";
+    document.getElementById('econRateDisplay').value   = (d.alpha*100).toFixed(1)+"%";
 }
 
 // ─── FAA GATEKEEPER (frontend mirror of contract logic) ──────
@@ -448,20 +469,77 @@ function runCsvGatekeeper(csv) {
     updateSubmitBtn();
 }
 
-// ─── VALUATION ENGINE ────────────────────────────────────────
-function calculateRV(csv, initialPrice, params) {
-    const rows=Papa.parse(csv.trim(),{header:true,skipEmptyLines:true}).data;
-    let mr=0, prevTis=0, recaptures=0;
-    return rows.filter(r=>r.Date&&r['Airframe TIS (hrs)']).map(r=>{
-        const tis=parseFloat(r['Airframe TIS (hrs)'])||0;
-        const work=r['Work Type/Note']||'';
-        const years=tis/2000;
-        mr += (tis-prevTis)*params.var;
-        let rv=initialPrice*Math.pow(1-params.econ,years)-(tis*params.perm)-mr;
-        let ev='';
-        if(/(B-Check|C-Check|D-Check)/i.test(work)){rv+=mr;ev=`RECAPTURED: +$${Math.round(mr).toLocaleString()}`;mr=0;recaptures++;}
-        prevTis=tis;
-        return{Date:r.Date,TIS:tis,Work:work,RV:Math.round(Math.max(0,rv)),MR:Math.round(mr),Event:ev,RawRecaptureCount:recaptures};
+// ─── VALUATION ENGINE (Paper Section IV.B) ───────────────────
+//
+// RV_t = V0 * e^(-alpha * t) - beta*t - (1-delta)*gamma*t
+//
+// Where t = TIS in "years" = TIS_hours / 2000
+//
+// Between major checks: variable loss L_var accrues as gamma * delta_TIS
+//   Running RV uses (1-delta)*gamma*t_cumulative to reflect unrecaptured loss
+//
+// At a major check (B/C/D-Check):
+//   VR = delta * L_var_accumulated  (value recapture event)
+//   L_var resets to 0
+//   RV jumps up by VR
+//
+// MR column = accumulated variable loss L_var (maintenance reserve accrual)
+//
+function calculateRV(csv, V0, p) {
+    // p = { alpha, beta, gamma, delta }
+    const rows = Papa.parse(csv.trim(), {header:true, skipEmptyLines:true}).data;
+
+    let L_var       = 0;   // accumulated variable loss since last major check (gamma * cumulative TIS)
+    let prevTIS     = 0;
+    let recaptures  = 0;
+    let totalVR     = 0;   // total value recaptured so far (for display)
+
+    return rows.filter(r => r.Date && r['Airframe TIS (hrs)']).map(r => {
+        const tis  = parseFloat(r['Airframe TIS (hrs)']) || 0;
+        const dTIS = Math.max(0, tis - prevTIS);
+        const work = r['Work Type/Note'] || '';
+
+        // Accrue variable loss this interval
+        L_var += p.gamma * dTIS;
+
+        // Convert TIS hours to "years" (industry standard: 2000 hrs/year)
+        const t = tis / 2000;
+
+        // --- Core formula: RV_t = V0*e^(-alpha*t) - beta*t_hrs - (1-delta)*gamma*t_hrs ---
+        // Note: beta and gamma are per-TIS-hour, so we use raw tis (hours), not years,
+        // for the linear terms. alpha is annualized so we use t (years) in the exponent.
+        const econ_decay   = V0 * Math.exp(-p.alpha * t);
+        const perm_loss    = p.beta  * tis;
+        const var_loss     = (1 - p.delta) * p.gamma * tis;
+
+        let rv = econ_decay - perm_loss - var_loss;
+
+        let eventNote = '';
+
+        // Major check → Value Recapture event
+        if (/(B-Check|C-Check|D-Check)/i.test(work)) {
+            // VR_t = delta * L_variable_t  (paper eq. VR_t = delta * gamma * t)
+            const VR = p.delta * L_var;
+            rv       += VR;
+            totalVR  += VR;
+            eventNote = `VR: +$${Math.round(VR).toLocaleString()} (delta=${p.delta}, L_var=$${Math.round(L_var).toLocaleString()})`;
+            L_var = 0;      // reset maintenance reserve
+            recaptures++;
+        }
+
+        prevTIS = tis;
+        return {
+            Date:              r.Date,
+            TIS:               tis,
+            Work:              work,
+            RV:                Math.round(Math.max(0, rv)),
+            MR:                Math.round(L_var),          // maintenance reserve (unrecaptured variable loss)
+            EconDecay:         Math.round(econ_decay),
+            PermLoss:          Math.round(perm_loss),
+            VarLoss:           Math.round(var_loss),
+            Event:             eventNote,
+            RawRecaptureCount: recaptures
+        };
     });
 }
 
@@ -489,7 +567,7 @@ async function handleUpload() {
         if(existing!=="0"){ showReject(`Duplicate CID — already registered as Record #${existing}.`); return; }
         setGate('gCid','pass','UNIQUE ✓');
 
-        showLoading("Valuation Engine","Applying Exponential Decay & MR Recapture model...");
+        showLoading("Valuation Engine","Applying RV model: V0·e^(-αt) - βt - (1-δ)γt ...");
         const processed = calculateRV(_csvContent, initP, AIRCRAFT_VARS[type]);
         const procCid   = await uploadToPinata(new Blob([Papa.unparse(processed)],{type:'text/csv'}),key,secret);
 
@@ -651,23 +729,31 @@ function renderUI(data, tail) {
     document.getElementById('statCurrentMR').textContent='$'+parseInt(last.MR).toLocaleString();
     document.getElementById('statEvents').textContent=last.RawRecaptureCount||0;
 
+    // Table with formula breakdown: RV | Econ Decay | Perm Loss | MR (L_var) | Event/VR
     let html=`<table><thead><tr>
-        <th>Date</th><th>TIS (hrs)</th>
-        <th style="color:var(--accent);">Residual Value</th>
-        <th style="color:var(--red);">MR Accrued</th>
-        <th>Event / Work Note</th>
+        <th>Date</th>
+        <th>TIS (hrs)</th>
+        <th style="color:var(--accent);">RV_t ($)</th>
+        <th style="color:var(--text-dim);">V0·e^(-αt)</th>
+        <th style="color:var(--red);">-βt</th>
+        <th style="color:#f97316;">MR / L_var</th>
+        <th>Event / VR</th>
     </tr></thead><tbody>`;
     data.forEach(r=>{
         const ev=r.Event&&r.Event!=='';
         html+=`<tr class="${ev?'event-row':''}">
-            <td>${r.Date}</td><td style="font-family:var(--mono);">${r.TIS}</td>
+            <td>${r.Date}</td>
+            <td style="font-family:var(--mono);">${parseInt(r.TIS).toLocaleString()}</td>
             <td style="color:var(--text);font-weight:700;">$${parseInt(r.RV).toLocaleString()}</td>
-            <td style="color:var(--red);">$${parseInt(r.MR).toLocaleString()}</td>
-            <td style="color:${ev?'var(--accent2)':'var(--text-dim)'};">${r.Event||r.Work||'—'}</td>
+            <td style="color:var(--text-dim);">$${parseInt(r.EconDecay||0).toLocaleString()}</td>
+            <td style="color:var(--red);">-$${parseInt(r.PermLoss||0).toLocaleString()}</td>
+            <td style="color:#f97316;">$${parseInt(r.MR).toLocaleString()}</td>
+            <td style="color:${ev?'var(--accent2)':'var(--text-dim)'};font-size:10px;">${r.Event||r.Work||'—'}</td>
         </tr>`;
     });
     document.getElementById('tableWrapper').innerHTML=html+'</tbody></table>';
 
+    // Chart — paper formula components
     const ctx=document.getElementById('rvChart').getContext('2d');
     if(chartInstance) chartInstance.destroy();
     chartInstance=new Chart(ctx,{
@@ -675,8 +761,24 @@ function renderUI(data, tail) {
         data:{
             labels:data.map(d=>d.Date),
             datasets:[
-                {label:'Residual Value',data:data.map(d=>d.RV),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',fill:true,tension:.25,borderWidth:2.5,pointRadius:0},
-                {label:'MR Accrued',    data:data.map(d=>d.MR),borderColor:'#ef4444',backgroundColor:'transparent',fill:false,tension:.2,borderWidth:1.5,borderDash:[4,4],pointRadius:0}
+                {
+                    label:'RV_t  (Residual Value)',
+                    data:data.map(d=>d.RV),
+                    borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',
+                    fill:true,tension:.25,borderWidth:3,pointRadius:0
+                },
+                {
+                    label:'V0·e^(-αt)  (Econ Decay)',
+                    data:data.map(d=>d.EconDecay||0),
+                    borderColor:'#64748b',backgroundColor:'transparent',
+                    fill:false,tension:.25,borderWidth:1.5,borderDash:[6,3],pointRadius:0
+                },
+                {
+                    label:'L_var  (MR Accrued)',
+                    data:data.map(d=>d.MR),
+                    borderColor:'#f97316',backgroundColor:'transparent',
+                    fill:false,tension:.2,borderWidth:1.5,borderDash:[3,3],pointRadius:0
+                }
             ]
         },
         options:{
