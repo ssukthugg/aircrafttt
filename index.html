@@ -325,16 +325,6 @@ async function initApp() {
         const res  = await fetch('./AircraftMaintenanceHistory.json');
         const json = await res.json();
         CONTRACT_ABI = json.abi;
-
-        // networks에서 현재 체인 ID에 맞는 주소 자동으로 읽기
-        const chainId = await new Web3(window.ethereum).eth.getChainId();
-        const network = json.networks[chainId];
-        if (!network) {
-            notify("error", `No deployment found for chain ${chainId}`);
-            return;
-        }
-        CONTRACT_ADDRESS = network.address;  // ← 자동 세팅
-        console.log("Contract loaded:", CONTRACT_ADDRESS);
         
     } catch(e) {
         notify("warn","⚠ Could not load AircraftMaintenanceHistory.json — place it in the repo root.");
