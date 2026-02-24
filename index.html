@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroChain | FAA-Compliant Maintenance Ledger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.1/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Barlow+Condensed:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#e7eaf1;--surface:#e6eeff;--surface2:#dfe7f5;
+            --border:#3d506f;--border-bright:#2a3d5a;
+            --accent:#3b82f6;--accent-dim:#1d3557;--accent2:#06b6d4;
+            --text:#111113;--text-dim:#505c6b;--text-mid:#3e4246;
+            --red:#ef4444;--green:#22c55e;--yellow:#eab308;
+            --mono:'IBM Plex Mono',monospace;--display:'Barlow Condensed',sans-serif;
+        }
+        *{box-sizing:border-box;}
+        body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;
+            background-image:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(59,130,246,.07) 0%,transparent 60%),
+                             radial-gradient(ellipse 40% 30% at 10% 90%,rgba(6,182,212,.05) 0%,transparent 60%);}
+        nav{background:rgba(10,14,23,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(16px);position:sticky;top:0;z-index:40;}
+        .logo-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:900;font-size:18px;color:#fff;}
+        .logo-text{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:2px;}
+        .v-badge{font-family:var(--display);font-size:10px;letter-spacing:2px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);}
+        .wallet-badge{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:30px;padding:6px 14px;font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-dim);}
+        .dot{width:8px;height:8px;border-radius:50%;}
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;}
+        .card-label{font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-bottom:16px;}
+        input,select{background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:13px;padding:10px 14px;width:100%;outline:none;transition:border-color .2s,box-shadow .2s;}
+        input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+        input.valid{border-color:var(--green)!important;}
+        input.invalid{border-color:var(--red)!important;}
+        input::placeholder{color:var(--text-dim);font-size:12px;}
+        select option{background:var(--surface2);}
+        .field-hint{font-size:10px;margin-top:4px;font-family:var(--display);letter-spacing:1px;}
+        .field-hint.ok{color:var(--green);}.field-hint.err{color:var(--red);}
+
+        .btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-family:var(--display);font-weight:900;font-size:13px;letter-spacing:2px;padding:14px 20px;border-radius:10px;border:none;cursor:pointer;width:100%;text-transform:uppercase;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 24px rgba(37,99,235,.25);}
+        .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 32px rgba(37,99,235,.35);}
+        .btn-primary:active{transform:scale(.98);}
+        .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+        .btn-search{background:var(--accent);color:#fff;font-family:var(--display);font-weight:900;font-size:12px;letter-spacing:1.5px;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;text-transform:uppercase;white-space:nowrap;transition:background .15s;}
+        .btn-search:hover{background:#2563eb;}
+        .btn-tab{font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:1.5px;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;text-transform:uppercase;transition:all .15s;color:var(--text-dim);background:transparent;}
+        .btn-tab.active{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(59,130,246,.3);}
+
+        .file-drop{border:2px dashed var(--border-bright);border-radius:12px;background:var(--surface2);padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;}
+        .file-drop:hover{border-color:var(--accent);background:rgba(59,130,246,.04);}
+        .file-drop.has-file{border-color:var(--green);}
+
+        /* GATEKEEPER PANEL */
+        .gate-panel{background:var(--surface2);border:1px solid var(--border-bright);border-radius:12px;overflow:hidden;}
+        .gate-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;}
+        .gate-row{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid rgba(30,42,61,.4);font-size:11px;}
+        .gate-row:last-child{border-bottom:none;}
+        .gate-key{color:var(--text-dim);font-family:var(--display);letter-spacing:1px;font-size:10px;text-transform:uppercase;}
+        .gate-status{font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:1px;}
+        .gate-status.pass{color:var(--green);}.gate-status.fail{color:var(--red);}.gate-status.pending{color:var(--text-dim);}
+
+        /* REJECT BANNER */
+        .reject-banner{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:14px 16px;margin-top:12px;}
+        .reject-title{font-family:var(--display);font-size:13px;font-weight:900;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:6px;}
+        .reject-list{list-style:none;padding:0;margin:0;}
+        .reject-list li{font-size:11px;color:#fca5a5;padding:2px 0;}
+        .reject-list li::before{content:"✗  ";}
+
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;}
+        .stat-label{font-family:var(--display);font-weight:700;font-size:10px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-bottom:6px;}
+        .stat-value{font-family:var(--display);font-weight:900;font-size:28px;}
+
+        table{width:100%;border-collapse:collapse;}
+        thead th{background:var(--surface2);font-family:var(--display);font-weight:700;font-size:10px;letter-spacing:2.5px;color:var(--text-dim);text-transform:uppercase;padding:12px 16px;text-align:left;position:sticky;top:0;z-index:5;border-bottom:1px solid var(--border);}
+        tbody tr{border-bottom:1px solid rgba(30,42,61,.6);transition:background .1s;}
+        tbody tr:hover{background:rgba(59,130,246,.04);}
+        tbody td{padding:11px 16px;font-size:12px;color:var(--text-mid);}
+        .event-row{background:rgba(59,130,246,.06)!important;}
+        .event-row td{color:var(--text)!important;}
+
+        .meta-box{background:var(--surface2);border:1px solid var(--border-bright);border-radius:12px;padding:16px;margin-top:14px;}
+        .meta-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 0;border-bottom:1px solid rgba(30,42,61,.5);}
+        .meta-row:last-child{border-bottom:none;}
+        .meta-key{color:var(--text-dim);font-family:var(--display);letter-spacing:1.5px;font-size:10px;text-transform:uppercase;}
+        .meta-val{color:var(--text);font-weight:700;font-size:11px;}
+        .meta-link{color:var(--accent2);text-decoration:underline;font-size:10px;}
+
+        .history-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s;display:flex;align-items:center;justify-content:space-between;}
+        .history-item:hover{border-color:var(--accent);background:rgba(59,130,246,.06);}
+        .history-item.active{border-color:var(--accent);background:rgba(59,130,246,.1);}
+        .history-badge{font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:20px;text-transform:uppercase;}
+        .badge-latest{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+        .badge-old{background:var(--surface);color:var(--text-dim);border:1px solid var(--border);}
+        .badge-faa{background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.25);}
+
+        .status-success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#86efac;border-radius:10px;padding:12px 16px;font-size:12px;font-family:var(--display);letter-spacing:1px;font-weight:700;}
+        .status-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;border-radius:10px;padding:12px 16px;font-size:12px;font-family:var(--display);letter-spacing:1px;font-weight:700;}
+        .status-warn{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.2);color:#fde047;border-radius:10px;padding:12px 16px;font-size:12px;font-family:var(--display);letter-spacing:1px;font-weight:700;}
+
+        .spinner{width:40px;height:40px;border-radius:50%;border:3px solid var(--border-bright);border-top-color:var(--accent);animation:spin .8s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .fade-in{animation:fadeIn .35s ease-out;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+        .modal-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;}
+        .modal-box{background:var(--surface);border:1px solid var(--border-bright);border-radius:20px;padding:36px;max-width:400px;width:90%;display:flex;flex-direction:column;align-items:center;text-align:center;}
+        .modal-title{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:2px;text-transform:uppercase;margin:12px 0 6px;}
+        .modal-sub{font-size:12px;color:var(--text-mid);line-height:1.7;}
+
+        .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;border:1px dashed var(--border-bright);border-radius:18px;}
+        .empty-icon{width:72px;height:72px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:20px;border:1px solid var(--border);}
+        .empty-title{font-family:var(--display);font-weight:900;font-size:20px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+        .empty-sub{color:var(--text-dim);font-size:12px;text-align:center;max-width:280px;}
+
+        ::-webkit-scrollbar{width:6px;height:6px;}
+        ::-webkit-scrollbar-track{background:var(--surface);}
+        ::-webkit-scrollbar-thumb{background:var(--border-bright);border-radius:3px;}
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+            <div class="logo-mark">A</div>
+            <span class="logo-text">AEROCHAIN</span>
+            <span class="v-badge">v3 · BNB Testnet</span>
+        </div>
+        <div class="wallet-badge">
+            <div class="dot" id="statusDot" style="background:var(--red)"></div>
+            <span id="walletAddress">OFFLINE</span>
+        </div>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div id="statusMessage" class="hidden mb-6 fade-in"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <!-- SIDEBAR -->
+        <div class="lg:col-span-4 space-y-5">
+
+            <div class="card p-6">
+                <div class="card-label">Asset Parameters</div>
+                <div class="space-y-4">
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">Aircraft Model</label>
+                        <select id="aircraftTypeSelect" onchange="updateDefaultParams()">
+                            <option value="B737">Boeing 737</option>
+                            <option value="B767">Boeing 767</option>
+                            <option value="B777">Boeing 777</option>
+                            <option value="B787">Boeing 787</option>
+                            <option value="A320">Airbus A320</option>
+                            <option value="A330">Airbus A330</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">Initial Price ($)</label>
+                            <input type="number" id="initialPriceInput">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">Econ Rate</label>
+                            <input type="text" id="econRateDisplay" disabled style="color:var(--text-dim);background:var(--bg);">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">Tail Number</label>
+                        <input type="text" id="aircraftTailNo" placeholder="e.g. N550MHA" oninput="liveValidate()">
+                        <div class="field-hint" id="hintTail"></div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-widest">14 CFR Part 65 — License Ref.</label>
+                        <input type="text" id="mechanicLicense" placeholder="e.g. A&P-123456" oninput="liveValidate()">
+                        <div class="field-hint" id="hintLicense"></div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-[var(--text-dim)] mb-2 uppercase tracking-widest">Cloud Keys (Pinata)</label>
+                        <div class="space-y-2">
+                            <input type="password" id="pinataApiKey" placeholder="API Key">
+                            <input type="password" id="pinataApiSecret" placeholder="Secret Key">
+                        </div>
+                    </div>
+
+                    <div class="file-drop" id="fileDrop" onclick="document.getElementById('maintenanceFile').click()">
+                        <input type="file" id="maintenanceFile" accept=".csv" class="hidden">
+                        <div style="font-size:24px;margin-bottom:6px;">📄</div>
+                        <p id="fileNameDisplay" style="font-family:var(--display);font-size:11px;color:var(--text-dim);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;">Attach FAA Log (.csv)</p>
+                    </div>
+
+                    <!-- FAA Gatekeeper Panel -->
+                    <div class="gate-panel">
+                        <div class="gate-header" style="color:var(--text-dim);">
+                            <span>🛡</span> FAA Gatekeeper (14 CFR)
+                        </div>
+                        <div class="gate-row"><span class="gate-key">14 CFR Part 65 License</span><span class="gate-status pending" id="gLicense">—</span></div>
+                        <div class="gate-row"><span class="gate-key">Tail Number Format</span>     <span class="gate-status pending" id="gTail">—</span></div>
+                        <div class="gate-row"><span class="gate-key">CSV Parseable</span>           <span class="gate-status pending" id="gCsv">AWAITING FILE</span></div>
+                        <div class="gate-row"><span class="gate-key">Required Columns</span>        <span class="gate-status pending" id="gCols">AWAITING FILE</span></div>
+                        <div class="gate-row"><span class="gate-key">Non-Null Records</span>        <span class="gate-status pending" id="gRecords">AWAITING FILE</span></div>
+                        <div class="gate-row"><span class="gate-key">TIS Monotonic</span>           <span class="gate-status pending" id="gTis">AWAITING FILE</span></div>
+                        <div class="gate-row"><span class="gate-key">CID Uniqueness</span>          <span class="gate-status pending" id="gCid">CHECKED ON SUBMIT</span></div>
+                        <div class="gate-row"><span class="gate-key">Timestamp Valid</span>         <span class="gate-status pass"   id="gTs">PASS</span></div>
+                    </div>
+
+                    <div id="rejectBanner" class="hidden reject-banner">
+                        <div class="reject-title">⛔ Schema Validation Failed</div>
+                        <ul class="reject-list" id="rejectList"></ul>
+                    </div>
+
+                    <button onclick="handleUpload()" id="submitBtn" class="btn-primary" disabled>
+                        Execute Valuation
+                    </button>
+                </div>
+            </div>
+
+            <!-- On-Chain Audit -->
+            <div class="card p-6">
+                <div class="card-label">On-Chain Audit</div>
+                <div class="flex gap-2 mb-4" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px;">
+                    <button class="btn-tab active flex-1" id="tabById"   onclick="switchSearchTab('id')">By ID</button>
+                    <button class="btn-tab flex-1"        id="tabByTail" onclick="switchSearchTab('tail')">By Tail #</button>
+                </div>
+                <div id="searchPanelId">
+                    <div class="flex gap-2">
+                        <input type="number" id="searchById" placeholder="Record ID  e.g. 1">
+                        <button onclick="searchByID()" class="btn-search">Fetch</button>
+                    </div>
+                </div>
+                <div id="searchPanelTail" class="hidden">
+                    <div class="flex gap-2">
+                        <input type="text" id="searchByTail" placeholder="e.g. N550MHA" style="text-transform:uppercase;">
+                        <button onclick="searchByTailNumber()" class="btn-search">Fetch</button>
+                    </div>
+                </div>
+                <div id="searchResultArea"></div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div class="lg:col-span-8">
+            <div id="emptyState" class="empty-state">
+                <div class="empty-icon">📡</div>
+                <div class="empty-title">System Idle</div>
+                <div class="empty-sub">Connect wallet and upload a FAA-validated maintenance log to begin.</div>
+            </div>
+            <div id="dataDashboard" class="hidden space-y-5 fade-in">
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="stat-card"><div class="stat-label">Current Value</div><div class="stat-value" id="statCurrentRV" style="color:var(--text);">$0</div></div>
+                    <div class="stat-card"><div class="stat-label">Accrued MR</div><div class="stat-value" id="statCurrentMR" style="color:var(--red);">$0</div></div>
+                    <div class="stat-card"><div class="stat-label">Recapture Events</div><div class="stat-value" id="statEvents" style="color:var(--accent2);">0</div></div>
+                </div>
+                <div class="card p-6">
+                    <div class="card-label">Value Decay & Recovery</div>
+                    <div style="height:320px;"><canvas id="rvChart"></canvas></div>
+                </div>
+                <div class="card overflow-hidden">
+                    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2.5px;color:var(--text-dim);text-transform:uppercase;">Transaction Ledger</span>
+                        <span id="recordCountLabel" style="font-family:var(--display);font-size:10px;font-weight:700;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:20px;"></span>
+                    </div>
+                    <div style="overflow-x:auto;max-height:380px;" id="tableWrapper"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Modal -->
+<div id="loadingModal" class="hidden modal-overlay">
+    <div class="modal-box fade-in">
+        <div id="spinner" class="spinner mb-2"></div>
+        <div id="successIcon" class="hidden" style="font-size:48px;margin-bottom:8px;">💎</div>
+        <div id="rejectIcon"  class="hidden" style="font-size:48px;margin-bottom:8px;">⛔</div>
+        <div id="modalTitle" class="modal-title">Processing</div>
+        <div id="modalMessage" class="modal-sub"></div>
+        <button id="modalCloseBtn" onclick="hideLoading()" class="hidden btn-primary mt-6" style="max-width:200px;">Dismiss</button>
+    </div>
+</div>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────
+// ↓ Replace this after: truffle migrate --network testnet
+const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000";
+const BNB_TESTNET_CHAIN_ID = 97;
+const REQUIRED_COLUMNS    = ['Date', 'Airframe TIS (hrs)', 'Work Type/Note'];
+const GATEWAYS = ["https://gateway.pinata.cloud/ipfs/","https://cloudflare-ipfs.com/ipfs/"];
+
+const AIRCRAFT_VARS = {
+    B737:{initial:80000000, perm:715.605,  var:1452.895,econ:.05},
+    B767:{initial:150000000,perm:1101.375, var:2236.125,econ:.05},
+    B777:{initial:140000000,perm:1568.655, var:3184.845,econ:.05},
+    B787:{initial:190000000,perm:1185.360, var:2406.640,econ:.05},
+    A320:{initial:77000000, perm:796.785,  var:1617.715,econ:.05},
+    A330:{initial:175000000,perm:1291.455, var:2622.045,econ:.05}
+};
+
+let web3, contract, chartInstance, CONTRACT_ABI;
+let _csvValidated = false;
+let _csvContent   = null;
+
+// ─── INIT ────────────────────────────────────────────────────
+async function initApp() {
+    updateDefaultParams();
+    try {
+        // ABI loaded from the JSON file in the same repo directory
+        const res  = await fetch('./AircraftMaintenanceHistory.json');
+        const json = await res.json();
+        CONTRACT_ABI = json.abi;
+    } catch(e) {
+        notify("warn","⚠ Could not load AircraftMaintenanceHistory.json — place it in the repo root.");
+        return;
+    }
+    await initWeb3();
+}
+
+async function initWeb3() {
+    if (!window.ethereum) { notify("error","MetaMask not detected."); return; }
+    web3 = new Web3(window.ethereum);
+    try {
+        const accs    = await ethereum.request({method:'eth_requestAccounts'});
+        const chainId = await web3.eth.getChainId();
+        if (chainId !== BNB_TESTNET_CHAIN_ID)
+            notify("warn",`⚠ Switch MetaMask to BNB Testnet (Chain 97). Currently on chain ${chainId}.`);
+        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+        document.getElementById('walletAddress').textContent = accs[0].substring(0,14).toUpperCase()+"...";
+        document.getElementById('statusDot').style.background = 'var(--green)';
+    } catch(e){ notify("error","Wallet connection failed: "+(e.message||e)); }
+}
+
+function updateDefaultParams() {
+    const d = AIRCRAFT_VARS[document.getElementById('aircraftTypeSelect').value];
+    if(!d) return;
+    document.getElementById('initialPriceInput').value = d.initial;
+    document.getElementById('econRateDisplay').value   = (d.econ*100).toFixed(1)+"%";
+}
+
+// ─── FAA GATEKEEPER (frontend mirror of contract logic) ──────
+function validateCSV(csvString) {
+    const errors = [];
+    let parsed, rows = [], fields = [];
+    try {
+        parsed = Papa.parse(csvString.trim(),{header:true,skipEmptyLines:true});
+        rows   = parsed.data;
+        fields = parsed.meta.fields || [];
+    } catch(e){ return {pass:false,errors:["Cannot parse CSV file."],rows:[]}; }
+
+    // [1] Required columns
+    const missing = REQUIRED_COLUMNS.filter(c => !fields.includes(c));
+    if(missing.length) errors.push("Missing columns: "+missing.join(', '));
+
+    // [2] Non-null records
+    if(rows.length === 0) errors.push("CSV has no data rows.");
+
+    // [3] Per-row: Date and TIS present
+    rows.slice(0,20).forEach((r,i) => {
+        if(!r.Date || r.Date.trim()==='') errors.push(`Row ${i+1}: Missing Date`);
+        if(!r['Airframe TIS (hrs)'] || isNaN(parseFloat(r['Airframe TIS (hrs)'])))
+            errors.push(`Row ${i+1}: Invalid Airframe TIS (hrs)`);
+    });
+
+    // [4] TIS monotonically increasing
+    let prev=-1, tisFail=0;
+    rows.forEach(r => {
+        const t=parseFloat(r['Airframe TIS (hrs)']);
+        if(!isNaN(t)){if(t<prev)tisFail++;prev=t;}
+    });
+    if(tisFail>0) errors.push(`TIS not monotonically increasing (${tisFail} anomalies)`);
+
+    return {pass:errors.length===0, errors, rows};
+}
+
+function setGate(id, status, label) {
+    const el=document.getElementById(id);
+    el.className='gate-status '+status;
+    el.textContent=label;
+}
+
+function liveValidate() {
+    const tail    = document.getElementById('aircraftTailNo').value.trim().toUpperCase();
+    const license = document.getElementById('mechanicLicense').value.trim();
+
+    const tailOk = tail.length >= 3;
+    setGate('gTail', tailOk?'pass':'fail', tailOk?'PASS':'FAIL');
+    hint('hintTail', tailOk, tailOk?'Format OK':'Min 3 characters');
+    document.getElementById('aircraftTailNo').className = tailOk ? 'valid' : 'invalid';
+
+    const licOk = license.length >= 6;
+    setGate('gLicense', licOk?'pass':'fail', licOk?'PASS':'FAIL');
+    hint('hintLicense', licOk, licOk?'License reference accepted':'Min 6 chars required (14 CFR Part 65)');
+    document.getElementById('mechanicLicense').className = licOk ? 'valid' : (license.length>0 ? 'invalid' : '');
+
+    updateSubmitBtn();
+}
+
+function hint(id, ok, msg) {
+    const el=document.getElementById(id);
+    el.className='field-hint '+(ok?'ok':'err');
+    el.textContent=msg;
+}
+
+function updateSubmitBtn() {
+    const tail    = document.getElementById('aircraftTailNo').value.trim();
+    const license = document.getElementById('mechanicLicense').value.trim();
+    document.getElementById('submitBtn').disabled = !(tail.length>=3 && license.length>=6 && _csvValidated);
+}
+
+// File input handler
+document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('maintenanceFile').addEventListener('change', e=>{
+        const file=e.target.files[0]; if(!file) return;
+        document.getElementById('fileNameDisplay').textContent=file.name.toUpperCase();
+        const reader=new FileReader();
+        reader.onload=ev=>{ _csvContent=ev.target.result; runCsvGatekeeper(_csvContent); };
+        reader.readAsText(file);
+    });
+});
+
+function runCsvGatekeeper(csv) {
+    const r = validateCSV(csv);
+    _csvValidated = r.pass;
+
+    const rowsOk = r.rows && r.rows.length > 0;
+    setGate('gCsv',    r.pass?'pass':'fail', r.pass?'PASS':'FAIL');
+    setGate('gCols',   r.pass?'pass':'fail', r.pass?'PASS':'FAIL');
+    setGate('gRecords',rowsOk?'pass':'fail', rowsOk?`PASS (${r.rows.length} rows)`:'FAIL');
+
+    // TIS check
+    const tisErr = r.errors.filter(e=>e.includes('TIS')).length===0;
+    setGate('gTis', (rowsOk&&tisErr)?'pass':'fail', (rowsOk&&tisErr)?'PASS':'FAIL');
+
+    document.getElementById('fileDrop').className='file-drop'+(r.pass?' has-file':'');
+
+    const banner=document.getElementById('rejectBanner');
+    if(!r.pass){
+        banner.classList.remove('hidden');
+        document.getElementById('rejectList').innerHTML=r.errors.map(e=>`<li>${e}</li>`).join('');
+    } else { banner.classList.add('hidden'); }
+
+    updateSubmitBtn();
+}
+
+// ─── VALUATION ENGINE ────────────────────────────────────────
+function calculateRV(csv, initialPrice, params) {
+    const rows=Papa.parse(csv.trim(),{header:true,skipEmptyLines:true}).data;
+    let mr=0, prevTis=0, recaptures=0;
+    return rows.filter(r=>r.Date&&r['Airframe TIS (hrs)']).map(r=>{
+        const tis=parseFloat(r['Airframe TIS (hrs)'])||0;
+        const work=r['Work Type/Note']||'';
+        const years=tis/2000;
+        mr += (tis-prevTis)*params.var;
+        let rv=initialPrice*Math.pow(1-params.econ,years)-(tis*params.perm)-mr;
+        let ev='';
+        if(/(B-Check|C-Check|D-Check)/i.test(work)){rv+=mr;ev=`RECAPTURED: +$${Math.round(mr).toLocaleString()}`;mr=0;recaptures++;}
+        prevTis=tis;
+        return{Date:r.Date,TIS:tis,Work:work,RV:Math.round(Math.max(0,rv)),MR:Math.round(mr),Event:ev,RawRecaptureCount:recaptures};
+    });
+}
+
+// ─── UPLOAD & ANCHOR ─────────────────────────────────────────
+async function handleUpload() {
+    const tail    = document.getElementById('aircraftTailNo').value.trim().toUpperCase();
+    const type    = document.getElementById('aircraftTypeSelect').value;
+    const license = document.getElementById('mechanicLicense').value.trim();
+    const initP   = parseFloat(document.getElementById('initialPriceInput').value);
+    const file    = document.getElementById('maintenanceFile').files[0];
+    const key     = document.getElementById('pinataApiKey').value;
+    const secret  = document.getElementById('pinataApiSecret').value;
+
+    if(!tail||!file||!key||!secret||isNaN(initP)||!license) return notify("error","Missing required fields.");
+    if(!_csvValidated||!_csvContent) return notify("error","CSV failed FAA gatekeeper. Fix schema errors first.");
+    if(!contract) return notify("error","Smart contract not connected.");
+
+    try {
+        showLoading("IPFS Upload","Uploading raw maintenance log to IPFS...");
+        const rawCid = await uploadToPinata(file,key,secret);
+
+        // Pre-flight: check CID uniqueness before spending gas
+        showLoading("Uniqueness Check","Verifying CID not already anchored on-chain...");
+        const existing = await contract.methods.getCidRegistry(rawCid).call();
+        if(existing!=="0"){ showReject(`Duplicate CID — already registered as Record #${existing}.`); return; }
+        setGate('gCid','pass','UNIQUE ✓');
+
+        showLoading("Valuation Engine","Applying Exponential Decay & MR Recapture model...");
+        const processed = calculateRV(_csvContent, initP, AIRCRAFT_VARS[type]);
+        const procCid   = await uploadToPinata(new Blob([Papa.unparse(processed)],{type:'text/csv'}),key,secret);
+
+        showLoading("Blockchain Anchor","FAA gatekeeper running on BNB Testnet...");
+        const accs = await web3.eth.getAccounts();
+        const tx   = await contract.methods.addRecord(
+            tail, type, rawCid, procCid, license, Math.round(initP)
+        ).send({from:accs[0]});
+
+        const fileId = tx.events.RecordAnchored.returnValues.fileId;
+        showSuccess(fileId, tail, rawCid);
+        renderUI(processed, tail);
+
+    } catch(err) {
+        console.error(err);
+        hideLoading();
+        const msg = err.message || "";
+        if(msg.includes("REJECTED:"))
+            notify("error","⛔ Contract Gatekeeper: "+msg.split("REJECTED:")[1].trim());
+        else
+            notify("error","Operation failed: "+msg.substring(0,140));
+    }
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────
+async function searchByID() {
+    const id=document.getElementById('searchById').value.trim();
+    if(!id||!contract) return;
+    try {
+        showLoading("Vault Search",`Fetching Record #${id}...`);
+        const rec=await contract.methods.getRecord(parseInt(id)).call();
+        hideLoading(); renderSingleResult(rec); await loadAndRenderRecord(rec);
+    } catch(e) {
+        hideLoading();
+        document.getElementById('searchResultArea').innerHTML=
+            `<div class="meta-box" style="border-color:rgba(239,68,68,.3);"><span style="color:#fca5a5;font-family:var(--display);font-size:11px;">NO RECORD FOUND FOR ID #${id}</span></div>`;
+    }
+}
+
+async function searchByTailNumber() {
+    const tail=document.getElementById('searchByTail').value.trim().toUpperCase();
+    if(!tail||!contract) return;
+    try {
+        showLoading("Tail Index Lookup",`Searching all records for ${tail}...`);
+        const ids=await contract.methods.getFileIdsByTail(tail).call();
+        if(!ids||ids.length===0){
+            hideLoading();
+            document.getElementById('searchResultArea').innerHTML=
+                `<div class="meta-box" style="border-color:rgba(239,68,68,.3);"><span style="color:#fca5a5;font-family:var(--display);font-size:11px;">NO RECORDS FOUND FOR TAIL ${tail}</span></div>`;
+            return;
+        }
+        const all=await contract.methods.getRecordsByTail(tail).call();
+        hideLoading(); renderTailHistory(tail,all);
+        await loadAndRenderRecord(all[all.length-1]);
+    } catch(e){ hideLoading(); notify("error","Search failed: "+(e.message||e)); }
+}
+
+// ─── RENDER ──────────────────────────────────────────────────
+function renderSingleResult(rec) {
+    const ts=rec.submittedAt?new Date(rec.submittedAt*1000).toLocaleDateString():"N/A";
+    document.getElementById('searchResultArea').innerHTML=`
+        <div class="meta-box fade-in">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-family:var(--display);font-size:18px;font-weight:900;letter-spacing:2px;color:var(--text);">${rec.tailNumber}</span>
+                <span style="font-family:var(--display);font-size:10px;color:var(--accent);">RECORD #${rec.fileId}</span>
+            </div>
+            <div class="meta-row"><span class="meta-key">Model</span><span class="meta-val">${rec.aircraftType}</span></div>
+            <div class="meta-row"><span class="meta-key">Init. Price</span><span class="meta-val">$${parseInt(rec.initialPrice).toLocaleString()}</span></div>
+            <div class="meta-row"><span class="meta-key">14 CFR License</span><span class="meta-val">${rec.mechanicLicense}</span></div>
+            <div class="meta-row"><span class="meta-key">FAA Validated</span><span class="meta-val" style="color:var(--green);">${rec.faaValidated?'✓ PASS':'✗ FAIL'}</span></div>
+            <div class="meta-row"><span class="meta-key">Anchored</span><span class="meta-val">${ts}</span></div>
+            <div class="meta-row"><span class="meta-key">Submitter</span><span class="meta-val" style="font-size:10px;">${rec.submitter}</span></div>
+            <div class="meta-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+                <span class="meta-key">IPFS</span>
+                <a class="meta-link" href="${GATEWAYS[0]}${rec.rawCid}" target="_blank">📄 Raw Log</a>
+                <a class="meta-link" href="${GATEWAYS[0]}${rec.processedCid}" target="_blank">📊 Valuation CSV</a>
+            </div>
+        </div>`;
+}
+
+function renderTailHistory(tail, records) {
+    if(!records||!records.length) return;
+    const sorted=[...records].reverse();
+    let html=`<div class="meta-box fade-in">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <span style="font-family:var(--display);font-size:20px;font-weight:900;letter-spacing:2px;">${tail}</span>
+            <span style="font-family:var(--display);font-size:10px;color:var(--text-dim);background:var(--surface);border:1px solid var(--border);padding:3px 10px;border-radius:12px;">${records.length} RECORD${records.length>1?'S':''}</span>
+        </div><div style="display:flex;flex-direction:column;gap:6px;">`;
+
+    sorted.forEach((rec,idx)=>{
+        const ts=rec.submittedAt?new Date(rec.submittedAt*1000).toLocaleDateString():"N/A";
+        const isLatest=idx===0;
+        html+=`<div class="history-item ${isLatest?'active':''}" onclick="selectHistoryRecord(${rec.fileId})" id="historyItem_${rec.fileId}">
+            <div>
+                <div style="font-family:var(--display);font-size:14px;font-weight:900;letter-spacing:1px;">#${rec.fileId} — ${rec.aircraftType}</div>
+                <div style="font-size:11px;color:var(--text-dim);margin-top:3px;">${ts} · ${rec.mechanicLicense}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                <div style="display:flex;gap:4px;">
+                    <span class="history-badge ${isLatest?'badge-latest':'badge-old'}">${isLatest?'Latest':'Archived'}</span>
+                    <span class="history-badge badge-faa">✓ FAA</span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <a class="meta-link" href="${GATEWAYS[0]}${rec.rawCid}" target="_blank" onclick="event.stopPropagation()">RAW</a>
+                    <a class="meta-link" href="${GATEWAYS[0]}${rec.processedCid}" target="_blank" onclick="event.stopPropagation()">CSV</a>
+                </div>
+            </div>
+        </div>`;
+    });
+    html+=`</div></div>`;
+    document.getElementById('searchResultArea').innerHTML=html;
+    window._tailMap={};
+    records.forEach(r=>{window._tailMap[r.fileId]=r;});
+}
+
+async function selectHistoryRecord(fileId) {
+    document.querySelectorAll('.history-item').forEach(el=>el.classList.remove('active'));
+    document.getElementById('historyItem_'+fileId)?.classList.add('active');
+    const rec=window._tailMap?.[fileId];
+    if(rec) await loadAndRenderRecord(rec);
+}
+
+async function loadAndRenderRecord(rec) {
+    try {
+        showLoading("Loading Valuation",`Fetching IPFS data for ${rec.tailNumber}...`);
+        const csv=await fetchIPFS(rec.processedCid);
+        renderUI(Papa.parse(csv.trim(),{header:true}).data, rec.tailNumber);
+        hideLoading();
+    } catch(e){ hideLoading(); notify("error","Could not load valuation from IPFS."); }
+}
+
+function switchSearchTab(tab) {
+    document.getElementById('searchPanelId').classList.toggle('hidden',tab!=='id');
+    document.getElementById('searchPanelTail').classList.toggle('hidden',tab!=='tail');
+    document.getElementById('tabById').classList.toggle('active',tab==='id');
+    document.getElementById('tabByTail').classList.toggle('active',tab==='tail');
+    document.getElementById('searchResultArea').innerHTML='';
+}
+
+// ─── IPFS ────────────────────────────────────────────────────
+async function uploadToPinata(blob,key,secret) {
+    const fd=new FormData(); fd.append('file',blob);
+    const res=await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS',{method:'POST',headers:{'pinata_api_key':key,'pinata_secret_api_key':secret},body:fd});
+    const d=await res.json(); if(d.error) throw new Error(d.error); return d.IpfsHash;
+}
+
+async function fetchIPFS(cid) {
+    for(let g of GATEWAYS){ try{const r=await fetch(g+cid,{signal:AbortSignal.timeout(8000)});if(r.ok)return await r.text();}catch(e){} }
+    throw new Error("All IPFS gateways timed out.");
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────
+function renderUI(data, tail) {
+    document.getElementById('emptyState').classList.add('hidden');
+    document.getElementById('dataDashboard').classList.remove('hidden');
+    document.getElementById('recordCountLabel').textContent=data.length+' ENTRIES';
+    const last=data[data.length-1];
+    document.getElementById('statCurrentRV').textContent='$'+parseInt(last.RV).toLocaleString();
+    document.getElementById('statCurrentMR').textContent='$'+parseInt(last.MR).toLocaleString();
+    document.getElementById('statEvents').textContent=last.RawRecaptureCount||0;
+
+    let html=`<table><thead><tr>
+        <th>Date</th><th>TIS (hrs)</th>
+        <th style="color:var(--accent);">Residual Value</th>
+        <th style="color:var(--red);">MR Accrued</th>
+        <th>Event / Work Note</th>
+    </tr></thead><tbody>`;
+    data.forEach(r=>{
+        const ev=r.Event&&r.Event!=='';
+        html+=`<tr class="${ev?'event-row':''}">
+            <td>${r.Date}</td><td style="font-family:var(--mono);">${r.TIS}</td>
+            <td style="color:var(--text);font-weight:700;">$${parseInt(r.RV).toLocaleString()}</td>
+            <td style="color:var(--red);">$${parseInt(r.MR).toLocaleString()}</td>
+            <td style="color:${ev?'var(--accent2)':'var(--text-dim)'};">${r.Event||r.Work||'—'}</td>
+        </tr>`;
+    });
+    document.getElementById('tableWrapper').innerHTML=html+'</tbody></table>';
+
+    const ctx=document.getElementById('rvChart').getContext('2d');
+    if(chartInstance) chartInstance.destroy();
+    chartInstance=new Chart(ctx,{
+        type:'line',
+        data:{
+            labels:data.map(d=>d.Date),
+            datasets:[
+                {label:'Residual Value',data:data.map(d=>d.RV),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',fill:true,tension:.25,borderWidth:2.5,pointRadius:0},
+                {label:'MR Accrued',    data:data.map(d=>d.MR),borderColor:'#ef4444',backgroundColor:'transparent',fill:false,tension:.2,borderWidth:1.5,borderDash:[4,4],pointRadius:0}
+            ]
+        },
+        options:{
+            responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:true,labels:{color:'#64748b',font:{family:'IBM Plex Mono',size:11},boxWidth:20}}},
+            scales:{
+                y:{ticks:{callback:v=>'$'+(v/1000000).toFixed(0)+'M',color:'#64748b',font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(30,42,61,.8)',borderDash:[4,4]}},
+                x:{grid:{display:false},ticks:{color:'#64748b',font:{size:10},maxTicksLimit:8}}
+            }
+        }
+    });
+}
+
+// ─── MODALS ──────────────────────────────────────────────────
+function notify(type,msg){
+    const el=document.getElementById('statusMessage');
+    el.className='mb-6 fade-in status-'+(type==='success'?'success':type==='warn'?'warn':'error');
+    el.textContent=msg; el.classList.remove('hidden');
+    setTimeout(()=>el.classList.add('hidden'),8000);
+}
+function showLoading(title,msg){
+    document.getElementById('spinner').classList.remove('hidden');
+    ['successIcon','rejectIcon','modalCloseBtn'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    document.getElementById('modalTitle').textContent=title;
+    document.getElementById('modalMessage').textContent=msg;
+    document.getElementById('loadingModal').classList.remove('hidden');
+}
+function showSuccess(id,tail,cid){
+    document.getElementById('spinner').classList.add('hidden');
+    document.getElementById('successIcon').classList.remove('hidden');
+    document.getElementById('modalCloseBtn').classList.remove('hidden');
+    document.getElementById('modalTitle').textContent='Record Anchored';
+    document.getElementById('modalMessage').innerHTML=
+        `FAA Gatekeeper: <b style="color:#86efac;">PASSED</b><br>On-chain ID: <b>#${id}</b><br>Aircraft: <b>${tail}</b><br><span style="font-size:10px;color:var(--text-dim);">CID: ${cid.substring(0,22)}...</span>`;
+}
+function showReject(reason){
+    document.getElementById('spinner').classList.add('hidden');
+    document.getElementById('rejectIcon').classList.remove('hidden');
+    document.getElementById('modalCloseBtn').classList.remove('hidden');
+    document.getElementById('modalTitle').textContent='Submission Rejected';
+    document.getElementById('modalMessage').innerHTML=`<span style="color:#fca5a5;">⛔ ${reason}</span>`;
+}
+function hideLoading(){ document.getElementById('loadingModal').classList.add('hidden'); }
+
+window.onload = initApp;
+</script>
+</body>
+</html>
